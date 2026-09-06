@@ -15,13 +15,11 @@ public record ProxyResourcePackEntry(
     /**
      * Bytes per {@code ResourcePackChunkDataPacket}. 100KB rather than a megabyte on purpose.
      *
-     * <p>The client asks for one chunk at a time, so this is also the burst size: a 1MB chunk leaves
-     * RakNet with ~750 datagrams to send at once, and the client's acknowledgements for them arrive
-     * back in a handful of ticks. That inbound burst is counted by the per-address packet limiter
-     * ({@code security.rateLimit.packetLimit}, 120 datagrams per address per tick), which blocks the
-     * address mid-login; the handshake then stalls and the player times out before they ever join.
-     * Smaller chunks spread the same bytes over more request/response round trips, so the return
-     * traffic stays inside the budget that protects the public listener.</p>
+     * <p>A chunk is still a sizeable RakNet burst: a 1MB chunk leaves RakNet with ~750 datagrams to
+     * send at once, and the client's acknowledgements for them arrive back in a handful of ticks.
+     * Some clients request every chunk concurrently, so {@code PacedResourcePackSender} also spaces
+     * the responses out. The smaller chunk and the pacing together keep both directions inside the
+     * transport and rate-limit budgets while a pack is downloading.</p>
      */
     static final int CHUNK_SIZE = 100 * 1024;
 

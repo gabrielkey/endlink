@@ -64,6 +64,7 @@ public final class ClientRelayPacketHandler implements BedrockPacketHandler {
     private final ProxyConnection connection;
     private final ProxyCommandInterceptor commandInterceptor;
     private final BackendCommandRouter commandRouter;
+    private PacedResourcePackSender proxyPackSender;
 
     public ClientRelayPacketHandler(
             ProxyConnection connection,
@@ -319,7 +320,7 @@ public final class ClientRelayPacketHandler implements BedrockPacketHandler {
             // send it, and answering here anyway would deliver the copy it just rejected.
             if (packet instanceof ResourcePackChunkRequestPacket chunkRequest
                     && connection.isProxyServedPack(chunkRequest.getPackId())) {
-                registry.sendChunk(connection.client(), chunkRequest.getPackId(), chunkRequest.getChunkIndex());
+                proxyPackSender(registry).enqueue(chunkRequest.getPackId(), chunkRequest.getChunkIndex());
                 return PacketSignal.HANDLED;
             }
             // Filter proxy pack IDs out of send_packs before forwarding to backend.
@@ -366,6 +367,19 @@ public final class ClientRelayPacketHandler implements BedrockPacketHandler {
 
         sendToBackend(connection.backend(), packet, traceSequence);
         return PacketSignal.HANDLED;
+    }
+
+    private PacedResourcePackSender proxyPackSender(ProxyResourcePackRegistry registry) {
+        if (proxyPackSender == null) {
+            proxyPackSender = new PacedResourcePackSender(
+                    () -> connection.client().isConnected(),
+                    (packId, chunkIndex) -> registry.sendChunk(
+                            connection.client(), packId, chunkIndex),
+                    (task, delay, unit) -> connection.client().getPeer().getChannel().eventLoop()
+                            .schedule(task, delay, unit)
+            );
+        }
+        return proxyPackSender;
     }
 
     /**
