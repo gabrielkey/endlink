@@ -44,6 +44,21 @@ the modifications carried here are:
   * Removed upstream modules and sources this project does not use.
 
 --------------------------------------------------------------------------------
+src/main/resources/blockstate/
+--------------------------------------------------------------------------------
+
+Block state differences between two Minecraft versions, used to translate block
+network ids across a version step.
+
+  Derived from: Mojang/bedrock-samples, metadata/vanilladata_modules/
+                mojang-blocks.json  https://github.com/Mojang/bedrock-samples
+
+These files are a diff of two published versions of that metadata, reduced to the
+blocks whose property set changed. They carry block and property names and their
+legal values -- protocol facts needed to speak to the game -- and no Mojang code
+or assets. Each file records the two versions it was diffed from.
+
+--------------------------------------------------------------------------------
 
 Endlink's own source (everything outside protocol/ and network/) is licensed
 under the Apache License 2.0; see LICENSE.

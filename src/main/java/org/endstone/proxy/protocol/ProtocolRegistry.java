@@ -52,7 +52,12 @@ public final class ProtocolRegistry {
      * Everything {@link #createDefault()} registers, still open for more.
      *
      * <p>Exists so an addon can contribute edges the proxy has no business knowing about. The proxy's
-     * own graph only ever goes newer&rarr;older; an addon adds the upgrade edge its translator needs, and a proxy running without it has no idea that direction exists.</p>
+     * own graph ordinarily goes newer&rarr;older only; an addon adds the upgrade edge its translator needs, and a proxy running without it has no idea that direction exists.</p>
+     *
+     * <p>2169&rarr;2192 is the single exception the proxy owns, added because a backend that updates
+     * before its players leaves them with no path at all. It is justified by being one known version
+     * step whose translation inverts exactly, not by a general willingness to route upwards; see
+     * {@link LegacyClientTo2192Translator}.</p>
      */
     public static Builder defaultBuilder() {
         return builder()
@@ -72,6 +77,16 @@ public final class ProtocolRegistry {
                 // see ModernClientTo2169Translator for why that is enough here and what would have
                 // to change if it stopped being.
                 .edge(CanonicalProtocol.V1_26_50, CanonicalProtocol.V1_26_45, ModernClientTo2169Translator.INSTANCE)
+                // The one upgrade edge this proxy owns, and the exception to the newer->older rule
+                // above. It is the edge on the line before, reversed, and it is here because the days
+                // after a release need it as badly as the days before: once the backends are on
+                // 1.26.50, a player who has not updated has no path through this graph at all and is
+                // refused outright. The step is symmetric -- the codecs reshape both ways and the
+                // block table inverts -- so the only thing the reverse needs of its own is a drop
+                // rule for the two packets 1.26.50 added. Registered through upgradeEdge, which
+                // already existed for addons, so edge()'s direction check stays as loud as it was.
+                // See LegacyClientTo2192Translator.
+                .upgradeEdge(CanonicalProtocol.V1_26_45, CanonicalProtocol.V1_26_50, LegacyClientTo2192Translator.INSTANCE)
                 // 2169 -> 2168 carries no packet rewriting. The only difference between the two is
                 // the RemoveScore constant, and that is settled per-leg by each codec's own helper
                 // when it encodes: a packet decoded from a 2169 client is a plain POJO by the time

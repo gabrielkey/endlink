@@ -2,6 +2,8 @@ package org.endstone.proxy.protocol;
 
 import org.cloudburstmc.protocol.bedrock.packet.AvailableCommandsPacket;
 import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
+import org.endstone.proxy.protocol.block.BlockStateTranslation;
+import org.endstone.proxy.protocol.block.BlockStateUpgrade;
 
 /**
  * Adjacent-version translator for the 1.26.50 (protocol 2192) &harr; 1.26.45 (protocol 2169) step.
@@ -40,21 +42,43 @@ import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
  * &mdash; two of the three packets whose 1.26.50 shape carries a field older versions cannot supply.
  * The neutral values above are the belt to that braces: an addon may register its own edges, and the
  * codecs must not throw whichever route a packet takes.</p>
+ *
+ * <p><b>What the codecs could not take care of: the blocks.</b> Everything above concerns packet
+ * shape, and packet shape turned out not to be what broke. 1.26.50 added properties to 139 block
+ * types &mdash; every stair, fence, glass pane, iron and copper bar and trip wire &mdash; and a
+ * block's network id is a hash of its state, so every one of those ids became a number the other
+ * side has never heard of. A 1.26.50 player on a 1.26.45 backend saw no stairs, no fences, no panes
+ * and no bars: not misplaced, <em>absent</em>, because a client with no block for an id draws air.
+ * No amount of correct packet encoding fixes that; the ids themselves have to be translated, which
+ * is what {@link BlockStateTranslation} does here, in both directions, using a table diffed from
+ * Mojang's own per-version block metadata.</p>
  */
 public final class ModernClientTo2169Translator implements PacketTranslator {
     public static final ModernClientTo2169Translator INSTANCE = new ModernClientTo2169Translator();
 
+    /**
+     * Built once and shared: the table is immutable, costs a few hundred kilobytes of small maps, and
+     * loading it per session would parse the same resource for every player who joins.
+     */
+    private static final BlockStateTranslation BLOCKS =
+            new BlockStateTranslation(BlockStateUpgrade.load("/blockstate/2169-to-2192.json"));
+
     private ModernClientTo2169Translator() {
+    }
+
+    /** The block id table this edge applies, exposed for diagnostics and tests. */
+    public static BlockStateTranslation blocks() {
+        return BLOCKS;
     }
 
     @Override
     public BedrockPacket translateServerbound(BedrockPacket packet, TranslationContext context) {
-        return packet;
+        return BLOCKS.rewriteServerbound(packet, BLOCKS.toOlder());
     }
 
     @Override
     public BedrockPacket translateClientbound(BedrockPacket packet, TranslationContext context) {
-        return packet;
+        return BLOCKS.rewriteClientbound(packet, BLOCKS.toNewer());
     }
 
     @Override

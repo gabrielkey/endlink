@@ -122,10 +122,27 @@ through.
 Endlink speaks 2192, so once 1.26.50 lands a player on it reaches a 1.26.45, 1.26.44 or 1.26.40
 backend with nothing to configure. Leave `backend.protocol=auto` and it resolves the pair itself.
 
-**This one has not been played on yet.** The codec comes from CloudburstMC's, built against Mojang's
-preview 26.50.27, and the proxy's own tests cover the pairing — but the release was not out when the
-support was written, so no 1.26.50 client has connected through it. If something is wrong with a
-1.26.50 join, that is where to look first.
+**Blocks are translated across this step, not just packets.** 1.26.50 added properties to 139 block
+types — every stair gained a corner state, and every fence, glass pane, iron and copper bar and trip
+wire gained four connection states. A block's network id is a hash of its state, so each of those
+became a number the other side has never heard of, and a client with no block for an id draws air:
+the first 1.26.50 player through an untranslated proxy saw no stairs, no fences, no panes and no bars
+at all. Endlink renumbers them in the chunk data itself, in both directions, from a table diffed out
+of Mojang's own per-version block metadata.
+
+A state the older version cannot express — an inner-corner stair, a fence connected on two sides —
+arrives as the plain block, which is what that version drew for itself before these were block
+states. Blocks 1.26.50 did not change keep their id untouched.
+
+**The other direction is covered too.** Once the backends move to 1.26.50, a player who has not
+updated would otherwise have no path through the version graph at all and be refused at the door.
+1.26.45 clients can reach a 1.26.50 backend, with the same block table read the other way. This is
+the one upgrade edge the proxy owns; every other one belongs to an addon.
+
+**Tested, but only partly played on.** The codec comes from CloudburstMC's, built against Mojang's
+preview 26.50.27. The block translation was written after a 26.50.27 player reported the missing
+stairs, and it is covered by tests down to the chunk payload — but a release client has not been
+through every path of it. If something is wrong with a 1.26.50 join, that is where to look first.
 
 ## Configuration
 

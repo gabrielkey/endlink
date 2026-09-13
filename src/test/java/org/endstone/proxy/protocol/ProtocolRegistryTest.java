@@ -207,13 +207,35 @@ class ProtocolRegistryTest {
         assertSame(ModernClientTo2169Translator.INSTANCE, registry.findBinding(2192, 2169).orElseThrow().translator());
     }
 
+    /**
+     * The deliberate exception to newer&rarr;older, and the case that shows up after the backends
+     * update rather than before: a 1.26.45 player meeting a 1.26.50 backend. Without this edge the
+     * graph has no path and the player is refused at the door.
+     */
     @Test
-    void addingTheNewestCodecCreatedNoUpgradeEdge() {
+    void a_1_26_45_clientCanStillReachA_1_26_50_backend() {
         ProtocolRegistry registry = ProtocolRegistry.createDefault();
 
-        assertTrue(registry.findBinding(2169, 2192).isEmpty());
+        ProtocolBinding binding = registry.findBinding(2169, 2192).orElseThrow();
+        assertEquals(2169, binding.clientCodec().getProtocolVersion());
+        assertEquals(2192, binding.backendCodec().getProtocolVersion());
+        assertSame(LegacyClientTo2192Translator.INSTANCE, binding.translator());
+    }
+
+    /**
+     * ...and it stays exactly one step. The upgrade edge is justified by that single version step
+     * inverting exactly; it is not a general licence to route upwards, and nothing may chain through
+     * it to reach a backend several versions newer than the client.
+     */
+    @Test
+    void theUpgradeEdgeDidNotOpenTheGraphUpwardsInGeneral() {
+        ProtocolRegistry registry = ProtocolRegistry.createDefault();
+
         assertTrue(registry.findBinding(2168, 2192).isEmpty());
         assertTrue(registry.findBinding(1001, 2192).isEmpty());
+        assertTrue(registry.findBinding(2168, 2169).isEmpty());
+        assertTrue(registry.findBinding(1001, 2169).isEmpty());
+        assertTrue(registry.findBinding(944, 1001).isEmpty());
     }
 
     /**
