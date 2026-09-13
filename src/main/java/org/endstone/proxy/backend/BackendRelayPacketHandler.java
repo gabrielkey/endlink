@@ -97,6 +97,9 @@ import org.endstone.proxy.config.BackendConfig;
 import org.endstone.proxy.diagnostics.PacketViolation;
 import org.endstone.proxy.diagnostics.ProtocolFault;
 import org.endstone.proxy.protocol.CanonicalProtocol;
+import org.endstone.proxy.protocol.ModernClientTo2169Translator;
+import org.endstone.proxy.protocol.block.BlockStateTranslation;
+import org.endstone.proxy.protocol.block.StairSeams;
 import org.endstone.proxy.resource.BackendPackCache;
 import org.endstone.proxy.resource.ProxyResourcePackRegistry;
 import org.endstone.proxy.verification.PendingJoin;
@@ -843,6 +846,9 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
 
         boolean sent = sendTranslatedClientbound(translated, packet.getClass().getSimpleName(), traceSequence, false);
         if (sent && translated instanceof StartGamePacket) {
+            // A new world: every column remembered for the old one describes blocks the player can no
+            // longer see, and keeping them would settle a seam against a chunk that is not there.
+            stairSeams.reset();
             // From here on an unexpected backend loss can be turned into a switch rather than a kick.
             connection.markClientJoinedWorld();
         }
@@ -851,6 +857,7 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
         }
         if (sent && translated instanceof LevelChunkPacket chunk) {
             markInitialLevelChunkForwarded(chunk);
+            settleStairSeams(chunk);
         } else if (sent && translated instanceof NetworkChunkPublisherUpdatePacket) {
             rememberInitialCrossProtocolPublisherChunks((NetworkChunkPublisherUpdatePacket) translated);
         }
@@ -2547,6 +2554,65 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
         return dimension == 0 ? -4 : 0;
     }
 
+    /**
+     * Corrects the stair corners along the seam between this column and the ones already sent.
+     *
+     * <p>A 1.26.50 stair's corner shape comes from the stairs around it, and the proxy has to work it
+     * out because the backend has no such state to send. {@code StairCornerPass} does that for a
+     * column against itself, which leaves its outer ring unresolved: those stairs reach into a column
+     * that had not arrived. The result is a line of squared-off corners along every chunk boundary,
+     * and this is where it is put right &mdash; once the neighbour turns up, the rule is run again
+     * over the shared edge and the blocks that moved are sent as ordinary updates.
+     *
+     * <p>Lives here rather than in the translator because it needs two things a translator does not
+     * have: memory of the columns this particular player has been sent, and somewhere to put packets
+     * that are not a translation of anything.
+     */
+    private void settleStairSeams(LevelChunkPacket chunk) {
+        if (chunk.isCachingEnabled() || chunk.getSubChunksLength() <= 0) {
+            return;
+        }
+        BlockStateTranslation blocks = ModernClientTo2169Translator.blocks();
+        if (!blocks.upgradesFor(
+                connection.sessionProfile().clientCodec().getProtocolVersion(),
+                connection.sessionProfile().backendCodec().getProtocolVersion())) {
+            return;
+        }
+
+        StairSeams.Collector collector = new StairSeams.Collector();
+        if (!blocks.stairCorners().collect(chunk.getData(), chunk.getSubChunksLength(), collector)) {
+            return;
+        }
+        List<StairSeams.Correction> corrections = stairSeams.settle(
+                chunk.getChunkX(),
+                chunk.getChunkZ(),
+                chunk.getDimension(),
+                minimumSubChunkY(chunk.getDimension()) * 16,
+                collector);
+        if (corrections.isEmpty()) {
+            return;
+        }
+        for (StairSeams.Correction correction : corrections) {
+            UpdateBlockPacket update = new UpdateBlockPacket();
+            update.setBlockPosition(Vector3i.from(correction.x(), correction.y(), correction.z()));
+            update.setDefinition(() -> correction.runtimeId());
+            update.setDataLayer(0);
+            update.getFlags().addAll(UpdateBlockPacket.FLAG_ALL);
+            connection.client().sendPacket(update);
+        }
+        if (!loggedStairSeam) {
+            // Once a session, so a log says whether this ever ran on real terrain rather than only
+            // in its tests. A seam that settles nothing is the common case and says nothing.
+            loggedStairSeam = true;
+            System.out.printf(
+                    "Settled a chunk seam for %s: %d stair corner(s) around chunk (%d, %d).%n",
+                    connection.client().getSocketAddress(),
+                    corrections.size(),
+                    chunk.getChunkX(),
+                    chunk.getChunkZ());
+        }
+    }
+
     private void syncDefinitionState(BedrockPacket packet) {
         if (packet instanceof StartGamePacket startGame) {
             if (backend == connection.pendingBackend()) {
@@ -3053,6 +3119,14 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
 
     /** {@code auto} (default), {@code always} or {@code never} — see {@link #backendNeedsLegacyJoinWorkarounds()}. */
     private static final String LEGACY_JOIN_WORKAROUNDS = System.getProperty("proxy.legacyJoinWorkarounds", "auto");
+
+    /**
+     * The columns this player has been sent, so a chunk boundary's stair corners can be settled when
+     * the column on the other side arrives. Per relay, so a backend switch starts with none.
+     */
+    private final StairSeams stairSeams = new StairSeams(ModernClientTo2169Translator.stairs());
+
+    private boolean loggedStairSeam;
 
     /**
      * Whether this backend needs the join workarounds that follow — position, chunk-publisher and

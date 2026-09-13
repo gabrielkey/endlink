@@ -31,20 +31,27 @@ class StairCornerPassTest {
 
     @Test
     void theIndexKnowsEveryStair() {
-        // 81 stair blocks, 4 facings, 2 halves.
-        assertEquals(81 * 4 * 2, INDEX.size());
+        // 81 stair blocks, 4 facings, 2 halves, 5 corner shapes.
+        assertEquals(81 * 4 * 2 * 5, INDEX.size());
         assertFalse(INDEX.isEmpty());
     }
 
+    /**
+     * Every corner variant resolves, not only the cornerless one, and that is load-bearing rather
+     * than incidental: {@link StairSeams} re-runs the rule over stairs this pass has already shaped,
+     * and if a shaped stair read back as "not a stair" the second pass would see holes where the
+     * first had done its work, and would unshape the corners around them.
+     */
     @Test
     void anIdCarriesBackTheStairItDescribes() {
-        StairIndex.Stair stair = INDEX.stairAt(id(Facing.NORTH, false, Corner.NONE));
-        assertNotNull(stair);
-        assertEquals(OAK, stair.identifier());
-        assertEquals(Facing.NORTH, stair.facing());
-        assertFalse(stair.upsideDown());
-        // A stair that already has a corner is a 1.26.50 backend's, and is not this pass's business.
-        assertNull(INDEX.stairAt(id(Facing.NORTH, false, Corner.INNER_LEFT)));
+        for (Corner corner : Corner.values()) {
+            StairIndex.Stair stair = INDEX.stairAt(id(Facing.NORTH, false, corner));
+            assertNotNull(stair, corner.value());
+            assertEquals(OAK, stair.identifier());
+            assertEquals(Facing.NORTH, stair.facing());
+            assertFalse(stair.upsideDown());
+        }
+        assertNull(INDEX.stairAt(AIR), "and something that is not a stair still is not one");
     }
 
     /** Counter-clockwise seen from above: north to west to south to east. */

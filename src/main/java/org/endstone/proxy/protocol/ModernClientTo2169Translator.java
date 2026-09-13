@@ -61,9 +61,10 @@ public final class ModernClientTo2169Translator implements PacketTranslator {
      * Built once and shared: the table is immutable, costs a few hundred kilobytes of small maps, and
      * loading it per session would parse the same resource for every player who joins.
      */
+    private static final StairIndex STAIRS = StairIndex.load("/blockstate/2169-to-2192.json");
+
     private static final BlockStateTranslation BLOCKS = new BlockStateTranslation(
-            BlockStateUpgrade.load("/blockstate/2169-to-2192.json"),
-            StairIndex.load("/blockstate/2169-to-2192.json"));
+            BlockStateUpgrade.load("/blockstate/2169-to-2192.json"), STAIRS);
 
     private ModernClientTo2169Translator() {
     }
@@ -71,6 +72,11 @@ public final class ModernClientTo2169Translator implements PacketTranslator {
     /** The block id table this edge applies, exposed for diagnostics and tests. */
     public static BlockStateTranslation blocks() {
         return BLOCKS;
+    }
+
+    /** The stair index, for a relay that has to settle chunk seams of its own. */
+    public static StairIndex stairs() {
+        return STAIRS;
     }
 
     @Override

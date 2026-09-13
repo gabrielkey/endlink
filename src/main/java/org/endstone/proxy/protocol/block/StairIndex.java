@@ -106,11 +106,11 @@ public final class StairIndex {
     public record Stair(String identifier, Facing facing, boolean upsideDown) {
     }
 
-    private final Map<Integer, Stair> byCornerlessId;
+    private final Map<Integer, Stair> byStairId;
     private final Map<Stair, Map<Corner, Integer>> idsByStair;
 
-    private StairIndex(Map<Integer, Stair> byCornerlessId, Map<Stair, Map<Corner, Integer>> idsByStair) {
-        this.byCornerlessId = Map.copyOf(byCornerlessId);
+    private StairIndex(Map<Integer, Stair> byStairId, Map<Stair, Map<Corner, Integer>> idsByStair) {
+        this.byStairId = Map.copyOf(byStairId);
         this.idsByStair = Map.copyOf(idsByStair);
     }
 
@@ -137,7 +137,7 @@ public final class StairIndex {
             throw new IllegalStateException("Could not parse " + resource, e);
         }
 
-        Map<Integer, Stair> byCornerlessId = new HashMap<>();
+        Map<Integer, Stair> byStairId = new HashMap<>();
         Map<Stair, Map<Corner, Integer>> idsByStair = new HashMap<>();
 
         for (Object rawGroup : (List<?>) root.get("groups")) {
@@ -159,12 +159,18 @@ public final class StairIndex {
                             ids.put(corner, id);
                         }
                         idsByStair.put(stair, Map.copyOf(ids));
-                        byCornerlessId.put(ids.get(Corner.NONE), stair);
+                        // Every corner variant resolves, not only the cornerless one. The chunk pass
+                        // only ever meets cornerless stairs, but settling a seam re-runs the rule
+                        // over stairs it has already shaped, and those have to read back as the
+                        // stairs they are or the second pass would see holes where the first worked.
+                        for (int id : ids.values()) {
+                            byStairId.put(id, stair);
+                        }
                     }
                 }
             }
         }
-        return new StairIndex(byCornerlessId, idsByStair);
+        return new StairIndex(byStairId, idsByStair);
     }
 
     private static boolean addsCorner(Map<?, ?> group) {
@@ -184,7 +190,7 @@ public final class StairIndex {
      * stair that already has a corner came from a 1.26.50 backend and needs nothing done to it.
      */
     public Stair stairAt(int runtimeId) {
-        return byCornerlessId.get(runtimeId);
+        return byStairId.get(runtimeId);
     }
 
     /** The id for {@code stair} wearing {@code corner}. */
@@ -194,10 +200,10 @@ public final class StairIndex {
 
     /** Whether this index knows any stairs at all. */
     public boolean isEmpty() {
-        return byCornerlessId.isEmpty();
+        return byStairId.isEmpty();
     }
 
     public int size() {
-        return byCornerlessId.size();
+        return byStairId.size();
     }
 }

@@ -57,6 +57,20 @@ public final class BlockStateTranslation {
         return upgrade;
     }
 
+    /** The stair corner pass, for the relay to read a finished chunk back with. */
+    public StairCornerPass stairCorners() {
+        return stairCorners;
+    }
+
+    /**
+     * Whether a client on {@code clientProtocol} talking to a backend on {@code backendProtocol} is
+     * the pairing this table carries blocks <em>up</em> for, which is the only one whose stair
+     * corners have to be invented.
+     */
+    public boolean upgradesFor(int clientProtocol, int backendProtocol) {
+        return clientProtocol == upgrade.toProtocol() && backendProtocol <= upgrade.fromProtocol();
+    }
+
     /** Renumber towards the newer version. */
     public IntUnaryOperator toNewer() {
         return toNewer;
