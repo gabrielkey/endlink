@@ -4,6 +4,7 @@ import org.cloudburstmc.protocol.bedrock.packet.AvailableCommandsPacket;
 import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
 import org.endstone.proxy.protocol.block.BlockStateTranslation;
 import org.endstone.proxy.protocol.block.BlockStateUpgrade;
+import org.endstone.proxy.protocol.block.StairIndex;
 
 /**
  * Adjacent-version translator for the 1.26.50 (protocol 2192) &harr; 1.26.45 (protocol 2169) step.
@@ -60,8 +61,9 @@ public final class ModernClientTo2169Translator implements PacketTranslator {
      * Built once and shared: the table is immutable, costs a few hundred kilobytes of small maps, and
      * loading it per session would parse the same resource for every player who joins.
      */
-    private static final BlockStateTranslation BLOCKS =
-            new BlockStateTranslation(BlockStateUpgrade.load("/blockstate/2169-to-2192.json"));
+    private static final BlockStateTranslation BLOCKS = new BlockStateTranslation(
+            BlockStateUpgrade.load("/blockstate/2169-to-2192.json"),
+            StairIndex.load("/blockstate/2169-to-2192.json"));
 
     private ModernClientTo2169Translator() {
     }

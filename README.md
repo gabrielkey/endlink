@@ -130,9 +130,18 @@ the first 1.26.50 player through an untranslated proxy saw no stairs, no fences,
 at all. Endlink renumbers them in the chunk data itself, in both directions, from a table diffed out
 of Mojang's own per-version block metadata.
 
-A state the older version cannot express — an inner-corner stair, a fence connected on two sides —
-arrives as the plain block, which is what that version drew for itself before these were block
-states. Blocks 1.26.50 did not change keep their id untouched.
+**Stair corner shapes are computed, not defaulted.** The corner state is derived from surrounding
+stairs, so a backend that has no such state cannot send one, and leaving it empty renders every inner
+and outer corner in the world as a straight stair facing the wrong way. Endlink works the shape out
+from the stairs around each block, using the same rule Java Edition uses — which is the rule Mojang
+says the new state exists for parity with. Stairs on a chunk's outer edge are left straight, because
+the neighbouring chunk may not have arrived.
+
+Fence, pane and bar connections are still defaulted to unconnected: unlike stairs, deciding those
+needs to know whether an arbitrary neighbouring block is solid, which the proxy has no table for.
+Going the other way, a state the older version cannot express — an inner-corner stair, a fence
+connected on two sides — arrives as the plain block, which is what that version drew for itself
+before these were block states. Blocks 1.26.50 did not change keep their id untouched.
 
 **The other direction is covered too.** Once the backends move to 1.26.50, a player who has not
 updated would otherwise have no path through the version graph at all and be refused at the door.

@@ -44,11 +44,13 @@ public final class BlockStateTranslation {
     private final BlockStateUpgrade upgrade;
     private final IntUnaryOperator toNewer;
     private final IntUnaryOperator toOlder;
+    private final StairCornerPass stairCorners;
 
-    public BlockStateTranslation(BlockStateUpgrade upgrade) {
+    public BlockStateTranslation(BlockStateUpgrade upgrade, StairIndex stairs) {
         this.upgrade = upgrade;
         this.toNewer = upgrade::toNewer;
         this.toOlder = upgrade::toOlder;
+        this.stairCorners = new StairCornerPass(stairs);
     }
 
     public BlockStateUpgrade upgrade() {
@@ -107,14 +109,21 @@ public final class BlockStateTranslation {
             // blob cache off for exactly this kind of reason, so this is a guard, not a path.
             return;
         }
-        ByteBuf rewritten = SubChunkPaletteRewriter.rewrite(
-                chunk.getData(), chunk.getSubChunksLength(), map);
-        if (rewritten != null) {
-            ByteBuf previous = chunk.getData();
-            chunk.setData(rewritten);
-            if (previous != null) {
-                previous.release();
-            }
+        setData(chunk, SubChunkPaletteRewriter.rewrite(chunk.getData(), chunk.getSubChunksLength(), map));
+        if (map == toNewer) {
+            // Only on the way up. Going down, the corner state is being dropped rather than invented.
+            setData(chunk, stairCorners.apply(chunk.getData(), chunk.getSubChunksLength()));
+        }
+    }
+
+    private static void setData(LevelChunkPacket chunk, ByteBuf replacement) {
+        if (replacement == null) {
+            return;
+        }
+        ByteBuf previous = chunk.getData();
+        chunk.setData(replacement);
+        if (previous != null) {
+            previous.release();
         }
     }
 
@@ -131,6 +140,14 @@ public final class BlockStateTranslation {
             if (rewritten != null) {
                 subChunk.setData(rewritten);
                 data.release();
+                data = rewritten;
+            }
+            if (map == toNewer) {
+                ByteBuf cornered = stairCorners.apply(data, 1);
+                if (cornered != null) {
+                    subChunk.setData(cornered);
+                    data.release();
+                }
             }
         }
     }
