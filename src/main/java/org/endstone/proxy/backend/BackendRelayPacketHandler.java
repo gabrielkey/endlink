@@ -844,7 +844,15 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
             return PacketSignal.HANDLED;
         }
 
+        // Gathered before the packet goes out, not after: the payload is the packet's own buffer and
+        // is encoded and released on the way to the client, so a read afterwards finds nothing and
+        // the seam is quietly never settled.
+        List<PendingStairSeam> stairSeamPieces = collectStairSeams(translated);
+
         boolean sent = sendTranslatedClientbound(translated, packet.getClass().getSimpleName(), traceSequence, false);
+        if (sent) {
+            settleStairSeams(stairSeamPieces);
+        }
         if (sent && translated instanceof StartGamePacket) {
             // A new world: every column remembered for the old one describes blocks the player can no
             // longer see, and keeping them would settle a seam against a chunk that is not there.
@@ -857,7 +865,6 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
         }
         if (sent && translated instanceof LevelChunkPacket chunk) {
             markInitialLevelChunkForwarded(chunk);
-            settleStairSeams(chunk);
         } else if (sent && translated instanceof NetworkChunkPublisherUpdatePacket) {
             rememberInitialCrossProtocolPublisherChunks((NetworkChunkPublisherUpdatePacket) translated);
         }
@@ -2554,62 +2561,109 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
         return dimension == 0 ? -4 : 0;
     }
 
+    /** One sub-chunk's stairs, gathered before it was sent and waiting to be settled. */
+    private record PendingStairSeam(StairSeams.Piece piece, StairSeams.Collector stairs) {
+    }
+
     /**
-     * Corrects the stair corners along the seam between this column and the ones already sent.
+     * Gathers the stairs of whatever world data is about to be sent, if this pairing needs them.
      *
-     * <p>A 1.26.50 stair's corner shape comes from the stairs around it, and the proxy has to work it
-     * out because the backend has no such state to send. {@code StairCornerPass} does that for a
-     * column against itself, which leaves its outer ring unresolved: those stairs reach into a column
-     * that had not arrived. The result is a line of squared-off corners along every chunk boundary,
-     * and this is where it is put right &mdash; once the neighbour turns up, the rule is run again
-     * over the shared edge and the blocks that moved are sent as ordinary updates.
-     *
-     * <p>Lives here rather than in the translator because it needs two things a translator does not
-     * have: memory of the columns this particular player has been sent, and somewhere to put packets
-     * that are not a translation of anything.
+     * <p><b>Both deliveries are covered, and that matters more than it looks.</b> A modern Bedrock
+     * server does not put blocks in {@code LevelChunkPacket} at all: it sends biomes there and
+     * answers sub-chunk requests with {@code SubChunkPacket}, one piece at a time. Watching only the
+     * chunk packet therefore sees no blocks whatsoever on such a server, and the seams it is supposed
+     * to settle are never even looked at.
      */
-    private void settleStairSeams(LevelChunkPacket chunk) {
-        if (chunk.isCachingEnabled() || chunk.getSubChunksLength() <= 0) {
-            return;
-        }
+    private List<PendingStairSeam> collectStairSeams(BedrockPacket translated) {
         BlockStateTranslation blocks = ModernClientTo2169Translator.blocks();
         if (!blocks.upgradesFor(
                 connection.sessionProfile().clientCodec().getProtocolVersion(),
                 connection.sessionProfile().backendCodec().getProtocolVersion())) {
-            return;
+            return List.of();
         }
 
-        StairSeams.Collector collector = new StairSeams.Collector();
-        if (!blocks.stairCorners().collect(chunk.getData(), chunk.getSubChunksLength(), collector)) {
-            return;
+        if (translated instanceof LevelChunkPacket chunk) {
+            if (chunk.isCachingEnabled() || chunk.getSubChunksLength() <= 0) {
+                return List.of();
+            }
+            // Inline sub-chunks run from the bottom of the dimension upwards.
+            int bottom = minimumSubChunkY(chunk.getDimension());
+            List<PendingStairSeam> pending = new ArrayList<>();
+            StairSeams.Collector[] byIndex = new StairSeams.Collector[chunk.getSubChunksLength()];
+            for (int i = 0; i < byIndex.length; i++) {
+                byIndex[i] = new StairSeams.Collector();
+            }
+            boolean read = blocks.stairCorners().collect(
+                    chunk.getData(), chunk.getSubChunksLength(),
+                    (x, y, z, stair, sentId) -> byIndex[y >> 4].accept(x, y, z, stair, sentId));
+            if (!read) {
+                return List.of();
+            }
+            for (int i = 0; i < byIndex.length; i++) {
+                pending.add(new PendingStairSeam(new StairSeams.Piece(
+                        chunk.getDimension(), chunk.getChunkX(), bottom + i, chunk.getChunkZ()),
+                        byIndex[i]));
+            }
+            return pending;
         }
-        List<StairSeams.Correction> corrections = stairSeams.settle(
-                chunk.getChunkX(),
-                chunk.getChunkZ(),
-                chunk.getDimension(),
-                minimumSubChunkY(chunk.getDimension()) * 16,
-                collector);
-        if (corrections.isEmpty()) {
-            return;
+
+        if (translated instanceof SubChunkPacket subChunkPacket) {
+            if (subChunkPacket.isCacheEnabled() || subChunkPacket.getCenterPosition() == null) {
+                return List.of();
+            }
+            List<PendingStairSeam> pending = new ArrayList<>();
+            for (SubChunkData subChunk : subChunkPacket.getSubChunks()) {
+                if (subChunk.getData() == null || subChunk.getPosition() == null) {
+                    continue;
+                }
+                StairSeams.Collector collector = new StairSeams.Collector();
+                if (!blocks.stairCorners().collect(subChunk.getData(), 1, collector)) {
+                    continue;
+                }
+                Vector3i at = subChunkPacket.getCenterPosition().add(subChunk.getPosition());
+                pending.add(new PendingStairSeam(new StairSeams.Piece(
+                        subChunkPacket.getDimension(), at.getX(), at.getY(), at.getZ()), collector));
+            }
+            return pending;
         }
-        for (StairSeams.Correction correction : corrections) {
-            UpdateBlockPacket update = new UpdateBlockPacket();
-            update.setBlockPosition(Vector3i.from(correction.x(), correction.y(), correction.z()));
-            update.setDefinition(() -> correction.runtimeId());
-            update.setDataLayer(0);
-            update.getFlags().addAll(UpdateBlockPacket.FLAG_ALL);
-            connection.client().sendPacket(update);
+        return List.of();
+    }
+
+    /**
+     * Corrects the stair corners along the seam between a piece just sent and the ones already there.
+     *
+     * <p>A 1.26.50 stair's corner shape comes from the stairs around it, and the proxy has to work it
+     * out because the backend has no such state to send. {@code StairCornerPass} does that for a
+     * sub-chunk against itself, which leaves its outer ring unresolved: those stairs reach into a
+     * chunk that had not arrived. The result is a line of squared-off corners along every chunk
+     * boundary, and this is where it is put right &mdash; once the neighbour turns up, the rule is run
+     * again over the shared edge and the blocks that moved are sent as ordinary updates.
+     *
+     * <p>Lives here rather than in the translator because it needs two things a translator does not
+     * have: memory of the world this particular player has been sent, and somewhere to put packets
+     * that are not a translation of anything.
+     */
+    private void settleStairSeams(List<PendingStairSeam> pending) {
+        for (PendingStairSeam piece : pending) {
+            for (StairSeams.Correction correction : stairSeams.settle(piece.piece(), piece.stairs())) {
+                UpdateBlockPacket update = new UpdateBlockPacket();
+                update.setBlockPosition(Vector3i.from(correction.x(), correction.y(), correction.z()));
+                update.setDefinition(() -> correction.runtimeId());
+                update.setDataLayer(0);
+                update.getFlags().addAll(UpdateBlockPacket.FLAG_ALL);
+                connection.client().sendPacket(update);
+            }
         }
-        if (!loggedStairSeam) {
-            // Once a session, so a log says whether this ever ran on real terrain rather than only
-            // in its tests. A seam that settles nothing is the common case and says nothing.
+        if (!pending.isEmpty() && !loggedStairSeam && stairSeams.remembered() >= 32) {
+            // Once a session, and only after enough world has gone by to be worth reporting. This is
+            // the line that says whether any of this ran on real terrain rather than only in tests -
+            // and, if corners are still wrong, which half of it to go and look at.
             loggedStairSeam = true;
             System.out.printf(
-                    "Settled a chunk seam for %s: %d stair corner(s) around chunk (%d, %d).%n",
+                    "Stair corner seams for %s: %d sub-chunk(s) with stairs, %d block(s) corrected.%n",
                     connection.client().getSocketAddress(),
-                    corrections.size(),
-                    chunk.getChunkX(),
-                    chunk.getChunkZ());
+                    stairSeams.remembered(),
+                    stairSeams.corrected());
         }
     }
 
