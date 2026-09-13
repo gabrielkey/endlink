@@ -3,7 +3,7 @@
 [![Build](https://github.com/luibara2/endlink/actions/workflows/build.yml/badge.svg)](https://github.com/luibara2/endlink/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/luibara2/endlink?include_prereleases&sort=semver)](https://github.com/luibara2/endlink/releases)
 [![Licence](https://img.shields.io/github/license/luibara2/endlink)](LICENSE)
-[![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-1.26.45-brightgreen)](https://github.com/luibara2/endlink#versions-run-the-latest-on-both-ends)
+[![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-1.26.50-brightgreen)](https://github.com/luibara2/endlink#versions-run-the-latest-on-both-ends)
 
 A Velocity-style proxy for Minecraft: Bedrock with Endstone/BDS backends. Players stay connected to
 the proxy while switching between backend servers; the proxy owns authentication and forges offline
@@ -29,6 +29,14 @@ On first start it writes a fully documented `config.properties` and creates a `p
 > backend is the configuration to expect for as long as that lasts, and it needs no configuration
 > here. Confirmed on a live server. See
 > [1.26.45 clients on 1.26.44 backends](#12645-clients-on-12644-backends).
+>
+> **Ready for Minecraft 1.26.50, protocol 2192 — built ahead of the release, not yet played on.**
+> 1.26.50 renumbered again, and this time the format really moved: thirteen packets changed shape
+> and two are new. The codec is ported from CloudburstMC's, whose source is Mojang's own preview
+> 26.50.27, so the wire format is not guesswork — but no live 1.26.50 client has connected through
+> this yet, because the release is not out. Expect a 1.26.50 client on a 1.26.45 backend to be the
+> configuration that matters, and see
+> [1.26.50 clients on older backends](#12650-clients-on-older-backends).
 >
 > **Also in v0.5.0, not confirmed in play:** a fix for a mount that stops taking input after a
 > backend switch ([#1](https://github.com/luibara2/endlink/issues/1)). The cause was found by
@@ -103,6 +111,21 @@ way through. Leave `backend.protocol=auto` and it resolves the pair on its own.
 
 This is the supported short-term gap, not a reason to stay on 1.26.44 — move the backends up when
 their server software does.
+
+### 1.26.50 clients on older backends
+
+Minecraft 1.26.50 renumbered the protocol again, 2169 to 2192. Unlike the 1.26.45 hotfix above this
+is a real format change — thirteen packets moved and two are new — so it is not a pair of numbers
+for one wire format, and the proxy translates across it in earnest rather than passing packets
+through.
+
+Endlink speaks 2192, so once 1.26.50 lands a player on it reaches a 1.26.45, 1.26.44 or 1.26.40
+backend with nothing to configure. Leave `backend.protocol=auto` and it resolves the pair itself.
+
+**This one has not been played on yet.** The codec comes from CloudburstMC's, built against Mojang's
+preview 26.50.27, and the proxy's own tests cover the pairing — but the release was not out when the
+support was written, so no 1.26.50 client has connected through it. If something is wrong with a
+1.26.50 join, that is where to look first.
 
 ## Configuration
 

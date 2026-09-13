@@ -64,7 +64,14 @@ public final class ProtocolRegistry {
                 .codec(CanonicalProtocol.V1_26_30)
                 .codec(CanonicalProtocol.V1_26_40)
                 .codec(CanonicalProtocol.V1_26_45)
+                .codec(CanonicalProtocol.V1_26_50)
                 // Directed adjacent translators (newer -> older). Longer gaps are auto-chained.
+                // 2192 -> 2169 is a real format step, not the renumbering the one below it is: the
+                // codecs reshape thirteen packets across it and the pairing is isCrossProtocol().
+                // It still rewrites nothing itself, because each leg's codec writes its own shape --
+                // see ModernClientTo2169Translator for why that is enough here and what would have
+                // to change if it stopped being.
+                .edge(CanonicalProtocol.V1_26_50, CanonicalProtocol.V1_26_45, ModernClientTo2169Translator.INSTANCE)
                 // 2169 -> 2168 carries no packet rewriting. The only difference between the two is
                 // the RemoveScore constant, and that is settled per-leg by each codec's own helper
                 // when it encodes: a packet decoded from a 2169 client is a plain POJO by the time

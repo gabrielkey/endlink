@@ -21,8 +21,18 @@ substantially from upstream. As required by section 4(b) of the Apache License,
 the modifications carried here are:
 
   * Added hand-written Bedrock codecs for protocol versions 944 (1.26.10),
-    975 (1.26.20), 1001 (1.26.30) and 2168 (1.26.40), each with the packet
-    serializers those releases changed. Upstream did not cover these versions.
+    975 (1.26.20), 1001 (1.26.30), 2168 (1.26.40) and 2169 (1.26.45), each with
+    the packet serializers those releases changed. Upstream did not cover these
+    versions when they were written.
+
+  * Added the codec for protocol 2192 (1.26.50), ported from upstream's own and
+    re-parented onto the 2169 codec here, since this copy expresses the 1.26.44
+    scoreboard difference as a flag on the shared helper rather than as a
+    separate codec. Three of its writers were made tolerant of a field an older
+    version cannot supply -- the dimension default biome, the entity diagnostic
+    position and dimension, and the environment attribute noise alignment --
+    which upstream writes unconditionally and which is null on anything a
+    pre-1.26.50 codec decoded.
 
   * Corrected serializers where a version's wire format was wrong or absent,
     including StartGame, LevelChunk, SubChunk, PlayerAuthInput, CraftingData,

@@ -8,6 +8,7 @@ import org.cloudburstmc.protocol.bedrock.codec.v975.Bedrock_v975;
 import org.cloudburstmc.protocol.bedrock.codec.v1001.Bedrock_v1001;
 import org.cloudburstmc.protocol.bedrock.codec.v2168.Bedrock_v2168;
 import org.cloudburstmc.protocol.bedrock.codec.v2169.Bedrock_v2169;
+import org.cloudburstmc.protocol.bedrock.codec.v2192.Bedrock_v2192;
 
 import java.util.Optional;
 
@@ -26,7 +27,20 @@ public enum CanonicalProtocol {
     // 1.26.45 is a hotfix that renumbered to 2169 and dropped the RemoveScore constant 1.26.44 added.
     // One codec, one release: the protocol number identifies the wire format again, so this entry
     // needs no newest-release override and BedrockRelease has nothing to decide for it.
-    V1_26_45(Bedrock_v2169.CODEC);
+    V1_26_45(Bedrock_v2169.CODEC),
+    // 1.26.50 renumbered again, 2169 -> 2192, and this time the format really moved: thirteen
+    // packets changed shape and two are new. Unlike the 2168/2169 pair it is not wire-compatible
+    // with its predecessor, which is why it is deliberately absent from sharesWireFormat below.
+    //
+    // No newest-release override, on purpose. 1.26.30 and 1.26.40 each kept their number across a
+    // run of hotfixes, so 1.26.51 and up probably speak 2192 too -- but 1.26.45 renumbered mid-line
+    // after four releases had not, so "probably" is the whole of the evidence. Claiming the line
+    // here would make a pinned backend.protocol=1.26.5x silently select this codec for a release
+    // that had in fact renumbered, and a wrong codec is a bad join rather than a clear error.
+    // Withholding it costs an operator who pins a hotfix by name one startup error naming the
+    // supported values, and costs 'auto' nothing at all: it reads the backend's protocol number.
+    // Widen it to the releases that turn out to share 2192, once they exist and are known to.
+    V1_26_50(Bedrock_v2192.CODEC);
 
     private final BedrockCodec codec;
 
@@ -164,6 +178,10 @@ public enum CanonicalProtocol {
      *
      * <p>So a new codec that is wire-compatible with its neighbour must be named here as well as
      * registered. Adding one without this makes it join, and then quietly degrades it.
+     *
+     * <p>The converse holds too, and 2192 is the case for it: 1.26.50 is a renumbering <em>and</em> a
+     * format change, so it is not in the family below. A 1.26.50 client on a 1.26.45 backend needs
+     * every one of those workarounds, because the two genuinely disagree about the wire.</p>
      */
     public static boolean sharesWireFormat(int protocolVersion, int otherProtocolVersion) {
         return protocolVersion == otherProtocolVersion

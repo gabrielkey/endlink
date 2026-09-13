@@ -64,8 +64,51 @@ class CanonicalProtocolReleaseTest {
 
     @Test
     void stillRefusesAReleaseNoCodecSpeaks() {
-        assertThrows(IllegalArgumentException.class, () -> CanonicalProtocol.fromConfig("1.26.50"));
+        assertThrows(IllegalArgumentException.class, () -> CanonicalProtocol.fromConfig("1.26.60"));
         assertThrows(IllegalArgumentException.class, () -> CanonicalProtocol.fromConfig("nonsense"));
+    }
+
+    @Test
+    void acceptsTheReleaseThatRenumberedTo2192() {
+        assertEquals(CanonicalProtocol.V1_26_50, CanonicalProtocol.fromConfig("1.26.50"));
+        assertEquals(CanonicalProtocol.V1_26_50, CanonicalProtocol.fromConfig("2192"));
+        assertEquals(CanonicalProtocol.V1_26_50, CanonicalProtocol.fromConfig("26.50"));
+        assertEquals(2192, CanonicalProtocol.V1_26_50.protocolVersion());
+        assertEquals("1.26.50", CanonicalProtocol.V1_26_50.minecraftVersion());
+    }
+
+    /**
+     * 1.26.50 claims one release and no more, deliberately. A hotfix line usually keeps its protocol
+     * number, but 1.26.45 renumbered mid-line after four releases had not, so claiming 1.26.51 and
+     * up here would be a guess that fails silently — a pinned backend would get this codec for a
+     * release that had in fact renumbered. Refusing the name is a startup error the operator reads.
+     */
+    @Test
+    void claimsNoHotfixItHasNotSeen() {
+        assertEquals("1.26.50", CanonicalProtocol.V1_26_50.newestRelease());
+        assertEquals(
+                CanonicalProtocol.V1_26_50.minecraftVersion(),
+                CanonicalProtocol.V1_26_50.newestRelease());
+        assertTrue(CanonicalProtocol.V1_26_50.coversRelease("1.26.50"));
+        assertFalse(CanonicalProtocol.V1_26_50.coversRelease("1.26.45"));
+        assertFalse(CanonicalProtocol.V1_26_50.coversRelease("1.26.51"));
+        // ...and it must not have been folded into the family below it either.
+        assertFalse(CanonicalProtocol.V1_26_45.coversRelease("1.26.50"));
+    }
+
+    /**
+     * The counterpart to the 2168/2169 test below: 1.26.50 renumbered <em>and</em> changed the
+     * format, so it must not join that family. Everything gated on "is this cross-protocol" is a
+     * workaround a 1.26.50 client on a 1.26.45 backend genuinely needs, and putting 2192 in the
+     * family would switch every one of them off for a pair that really does disagree about the wire.
+     */
+    @Test
+    void theSecondRenumberingDoesNotShareItsWireFormat() {
+        assertFalse(CanonicalProtocol.sharesWireFormat(2192, 2169));
+        assertFalse(CanonicalProtocol.sharesWireFormat(2169, 2192));
+        assertFalse(CanonicalProtocol.sharesWireFormat(2192, 2168));
+        assertFalse(CanonicalProtocol.sharesWireFormat(2168, 2192));
+        assertTrue(CanonicalProtocol.sharesWireFormat(2192, 2192));
     }
 
     @Test
@@ -94,9 +137,10 @@ class CanonicalProtocolReleaseTest {
 
     @Test
     void theProxyNowAdvertisesTheRenumberedRelease() {
-        // newest() is what the server list shows and what a client is matched against, so a 2169
+        // newest() is what the server list shows and what a client is matched against, so a 2192
         // client is only reachable if this moved with the new codec.
-        assertEquals(CanonicalProtocol.V1_26_45, CanonicalProtocol.newest());
+        assertEquals(CanonicalProtocol.V1_26_50, CanonicalProtocol.newest());
+        assertEquals(2192, CanonicalProtocol.newest().protocolVersion());
     }
 
     @Test
@@ -153,6 +197,7 @@ class CanonicalProtocolReleaseTest {
     @Test
     void aRealVersionGapIsStillARealVersionGap() {
         // These pairs need the workarounds. Widening the family would silently switch them off.
+        assertFalse(CanonicalProtocol.sharesWireFormat(2192, 1001));
         assertFalse(CanonicalProtocol.sharesWireFormat(2169, 1001));
         assertFalse(CanonicalProtocol.sharesWireFormat(2168, 1001));
         assertFalse(CanonicalProtocol.sharesWireFormat(1001, 975));
