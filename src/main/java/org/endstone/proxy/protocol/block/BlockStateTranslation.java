@@ -25,7 +25,8 @@ import java.util.function.IntUnaryOperator;
  *
  * <ul>
  *   <li>{@link LevelChunkPacket} and {@link SubChunkPacket} — the world itself, rewritten inside the
- *       opaque payload by {@link SubChunkPaletteRewriter}.
+ *       opaque payload by {@link SubChunkPaletteRewriter}, and then given the states 1.26.50
+ *       added and the backend cannot supply by {@link StairCornerPass} and {@link BlockJoinPass}.
  *   <li>{@link UpdateBlockPacket}, {@link UpdateBlockSyncedPacket}, {@link UpdateSubChunkBlocksPacket}
  *       — every block that changes after the chunk was sent.
  *   <li>{@link InventoryTransactionPacket} and the item-use transaction inside
@@ -45,12 +46,14 @@ public final class BlockStateTranslation {
     private final IntUnaryOperator toNewer;
     private final IntUnaryOperator toOlder;
     private final StairCornerPass stairCorners;
+    private final BlockJoinPass blockJoins;
 
-    public BlockStateTranslation(BlockStateUpgrade upgrade, StairIndex stairs) {
+    public BlockStateTranslation(BlockStateUpgrade upgrade, StairIndex stairs, BlockJoinIndex joins) {
         this.upgrade = upgrade;
         this.toNewer = upgrade::toNewer;
         this.toOlder = upgrade::toOlder;
         this.stairCorners = new StairCornerPass(stairs);
+        this.blockJoins = new BlockJoinPass(joins);
     }
 
     public BlockStateUpgrade upgrade() {
@@ -60,6 +63,11 @@ public final class BlockStateTranslation {
     /** The stair corner pass, for the relay to read a finished chunk back with. */
     public StairCornerPass stairCorners() {
         return stairCorners;
+    }
+
+    /** The fence, pane and bar pass, for the relay to read a finished chunk back with. */
+    public BlockJoinPass blockJoins() {
+        return blockJoins;
     }
 
     /**
@@ -125,8 +133,10 @@ public final class BlockStateTranslation {
         }
         setData(chunk, SubChunkPaletteRewriter.rewrite(chunk.getData(), chunk.getSubChunksLength(), map));
         if (map == toNewer) {
-            // Only on the way up. Going down, the corner state is being dropped rather than invented.
+            // Only on the way up. Going down, the corner and the arms are being dropped rather than
+            // invented, and the older client works both out for itself as it always did.
             setData(chunk, stairCorners.apply(chunk.getData(), chunk.getSubChunksLength()));
+            setData(chunk, blockJoins.apply(chunk.getData(), chunk.getSubChunksLength()));
         }
     }
 
@@ -160,6 +170,12 @@ public final class BlockStateTranslation {
                 ByteBuf cornered = stairCorners.apply(data, 1);
                 if (cornered != null) {
                     subChunk.setData(cornered);
+                    data.release();
+                    data = cornered;
+                }
+                ByteBuf joined = blockJoins.apply(data, 1);
+                if (joined != null) {
+                    subChunk.setData(joined);
                     data.release();
                 }
             }

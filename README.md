@@ -137,8 +137,12 @@ from the stairs around each block, using the same rule Java Edition uses — whi
 says the new state exists for parity with. Stairs on a chunk's outer edge are left straight, because
 the neighbouring chunk may not have arrived.
 
-Fence, pane and bar connections are still defaulted to unconnected: unlike stairs, deciding those
-needs to know whether an arbitrary neighbouring block is solid, which the proxy has no table for.
+**Fences, panes and bars reach out to each other too**, by the same rule and in the same place: a
+fence connects to a fence of the same woodiness, a pane or bar to any other pane or bar. The one
+clause not yet implemented is Java's third — either also connects to a block whose face beside it is
+solid — because answering that needs a solidity table for every block state, which the proxy has no
+source for. A fence run therefore still stops short where it meets a wall.
+
 Going the other way, a state the older version cannot express — an inner-corner stair, a fence
 connected on two sides — arrives as the plain block, which is what that version drew for itself
 before these were block states. Blocks 1.26.50 did not change keep their id untouched.

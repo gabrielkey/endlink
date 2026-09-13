@@ -98,6 +98,7 @@ import org.endstone.proxy.diagnostics.PacketViolation;
 import org.endstone.proxy.diagnostics.ProtocolFault;
 import org.endstone.proxy.protocol.CanonicalProtocol;
 import org.endstone.proxy.protocol.ModernClientTo2169Translator;
+import org.endstone.proxy.protocol.block.BlockJoinSeams;
 import org.endstone.proxy.protocol.block.BlockStateTranslation;
 import org.endstone.proxy.protocol.block.StairSeams;
 import org.endstone.proxy.resource.BackendPackCache;
@@ -847,16 +848,17 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
         // Gathered before the packet goes out, not after: the payload is the packet's own buffer and
         // is encoded and released on the way to the client, so a read afterwards finds nothing and
         // the seam is quietly never settled.
-        List<PendingStairSeam> stairSeamPieces = collectStairSeams(translated);
+        List<PendingSeam> seamPieces = collectSeams(translated);
 
         boolean sent = sendTranslatedClientbound(translated, packet.getClass().getSimpleName(), traceSequence, false);
         if (sent) {
-            settleStairSeams(stairSeamPieces);
+            settleSeams(seamPieces);
         }
         if (sent && translated instanceof StartGamePacket) {
             // A new world: every column remembered for the old one describes blocks the player can no
             // longer see, and keeping them would settle a seam against a chunk that is not there.
             stairSeams.reset();
+            blockJoinSeams.reset();
             // From here on an unexpected backend loss can be turned into a switch rather than a kick.
             connection.markClientJoinedWorld();
         }
@@ -2561,8 +2563,20 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
         return dimension == 0 ? -4 : 0;
     }
 
-    /** One sub-chunk's stairs, gathered before it was sent and waiting to be settled. */
-    private record PendingStairSeam(StairSeams.Piece piece, StairSeams.Collector stairs) {
+    /**
+     * One sub-chunk's stairs and joining blocks, gathered before it was sent and waiting to be
+     * settled.
+     *
+     * <p>Both rules key on the same piece and are collected in the same walk of the same payload, so
+     * they travel together rather than as two parallel lists that could fall out of step.
+     */
+    private record PendingSeam(StairSeams.Piece piece, StairSeams.Collector stairs,
+                               BlockJoinSeams.Collector joints) {
+
+        BlockJoinSeams.Piece joinPiece() {
+            return new BlockJoinSeams.Piece(
+                    piece.dimension(), piece.chunkX(), piece.subChunkY(), piece.chunkZ());
+        }
     }
 
     /**
@@ -2574,7 +2588,7 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
      * chunk packet therefore sees no blocks whatsoever on such a server, and the seams it is supposed
      * to settle are never even looked at.
      */
-    private List<PendingStairSeam> collectStairSeams(BedrockPacket translated) {
+    private List<PendingSeam> collectSeams(BedrockPacket translated) {
         BlockStateTranslation blocks = ModernClientTo2169Translator.blocks();
         if (!blocks.upgradesFor(
                 connection.sessionProfile().clientCodec().getProtocolVersion(),
@@ -2588,21 +2602,26 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
             }
             // Inline sub-chunks run from the bottom of the dimension upwards.
             int bottom = minimumSubChunkY(chunk.getDimension());
-            List<PendingStairSeam> pending = new ArrayList<>();
-            StairSeams.Collector[] byIndex = new StairSeams.Collector[chunk.getSubChunksLength()];
-            for (int i = 0; i < byIndex.length; i++) {
-                byIndex[i] = new StairSeams.Collector();
+            List<PendingSeam> pending = new ArrayList<>();
+            StairSeams.Collector[] stairs = new StairSeams.Collector[chunk.getSubChunksLength()];
+            BlockJoinSeams.Collector[] joints = new BlockJoinSeams.Collector[chunk.getSubChunksLength()];
+            for (int i = 0; i < stairs.length; i++) {
+                stairs[i] = new StairSeams.Collector();
+                joints[i] = new BlockJoinSeams.Collector();
             }
             boolean read = blocks.stairCorners().collect(
                     chunk.getData(), chunk.getSubChunksLength(),
-                    (x, y, z, stair, sentId) -> byIndex[y >> 4].accept(x, y, z, stair, sentId));
+                    (x, y, z, stair, sentId) -> stairs[y >> 4].accept(x, y, z, stair, sentId))
+                    & blocks.blockJoins().collect(
+                    chunk.getData(), chunk.getSubChunksLength(),
+                    (x, y, z, joint, sentId) -> joints[y >> 4].accept(x, y, z, joint, sentId));
             if (!read) {
                 return List.of();
             }
-            for (int i = 0; i < byIndex.length; i++) {
-                pending.add(new PendingStairSeam(new StairSeams.Piece(
+            for (int i = 0; i < stairs.length; i++) {
+                pending.add(new PendingSeam(new StairSeams.Piece(
                         chunk.getDimension(), chunk.getChunkX(), bottom + i, chunk.getChunkZ()),
-                        byIndex[i]));
+                        stairs[i], joints[i]));
             }
             return pending;
         }
@@ -2611,18 +2630,21 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
             if (subChunkPacket.isCacheEnabled() || subChunkPacket.getCenterPosition() == null) {
                 return List.of();
             }
-            List<PendingStairSeam> pending = new ArrayList<>();
+            List<PendingSeam> pending = new ArrayList<>();
             for (SubChunkData subChunk : subChunkPacket.getSubChunks()) {
                 if (subChunk.getData() == null || subChunk.getPosition() == null) {
                     continue;
                 }
-                StairSeams.Collector collector = new StairSeams.Collector();
-                if (!blocks.stairCorners().collect(subChunk.getData(), 1, collector)) {
+                StairSeams.Collector stairs = new StairSeams.Collector();
+                BlockJoinSeams.Collector joints = new BlockJoinSeams.Collector();
+                if (!blocks.stairCorners().collect(subChunk.getData(), 1, stairs)
+                        | !blocks.blockJoins().collect(subChunk.getData(), 1, joints)) {
                     continue;
                 }
                 Vector3i at = subChunkPacket.getCenterPosition().add(subChunk.getPosition());
-                pending.add(new PendingStairSeam(new StairSeams.Piece(
-                        subChunkPacket.getDimension(), at.getX(), at.getY(), at.getZ()), collector));
+                pending.add(new PendingSeam(new StairSeams.Piece(
+                        subChunkPacket.getDimension(), at.getX(), at.getY(), at.getZ()),
+                        stairs, joints));
             }
             return pending;
         }
@@ -2643,15 +2665,14 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
      * have: memory of the world this particular player has been sent, and somewhere to put packets
      * that are not a translation of anything.
      */
-    private void settleStairSeams(List<PendingStairSeam> pending) {
-        for (PendingStairSeam piece : pending) {
+    private void settleSeams(List<PendingSeam> pending) {
+        for (PendingSeam piece : pending) {
             for (StairSeams.Correction correction : stairSeams.settle(piece.piece(), piece.stairs())) {
-                UpdateBlockPacket update = new UpdateBlockPacket();
-                update.setBlockPosition(Vector3i.from(correction.x(), correction.y(), correction.z()));
-                update.setDefinition(() -> correction.runtimeId());
-                update.setDataLayer(0);
-                update.getFlags().addAll(UpdateBlockPacket.FLAG_ALL);
-                connection.client().sendPacket(update);
+                sendBlockCorrection(correction.x(), correction.y(), correction.z(), correction.runtimeId());
+            }
+            for (BlockJoinSeams.Correction correction
+                    : blockJoinSeams.settle(piece.joinPiece(), piece.joints())) {
+                sendBlockCorrection(correction.x(), correction.y(), correction.z(), correction.runtimeId());
             }
         }
         if (!pending.isEmpty() && !loggedStairSeam && stairSeams.remembered() >= 32) {
@@ -2665,6 +2686,25 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
                     stairSeams.remembered(),
                     stairSeams.corrected());
         }
+        if (!pending.isEmpty() && !loggedBlockJoinSeam && blockJoinSeams.remembered() >= 32) {
+            loggedBlockJoinSeam = true;
+            System.out.printf(
+                    "Block join seams for %s: %d sub-chunk(s) with fences, panes or bars, "
+                            + "%d block(s) corrected.%n",
+                    connection.client().getSocketAddress(),
+                    blockJoinSeams.remembered(),
+                    blockJoinSeams.corrected());
+        }
+    }
+
+    /** One settled block, as an ordinary update: this is not a translation of anything the backend sent. */
+    private void sendBlockCorrection(int x, int y, int z, int runtimeId) {
+        UpdateBlockPacket update = new UpdateBlockPacket();
+        update.setBlockPosition(Vector3i.from(x, y, z));
+        update.setDefinition(() -> runtimeId);
+        update.setDataLayer(0);
+        update.getFlags().addAll(UpdateBlockPacket.FLAG_ALL);
+        connection.client().sendPacket(update);
     }
 
     private void syncDefinitionState(BedrockPacket packet) {
@@ -3179,8 +3219,10 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
      * the column on the other side arrives. Per relay, so a backend switch starts with none.
      */
     private final StairSeams stairSeams = new StairSeams(ModernClientTo2169Translator.stairs());
+    private final BlockJoinSeams blockJoinSeams = new BlockJoinSeams(ModernClientTo2169Translator.joins());
 
     private boolean loggedStairSeam;
+    private boolean loggedBlockJoinSeam;
 
     /**
      * Whether this backend needs the join workarounds that follow — position, chunk-publisher and

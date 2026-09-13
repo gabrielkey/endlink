@@ -2,6 +2,7 @@ package org.endstone.proxy.protocol;
 
 import org.cloudburstmc.protocol.bedrock.packet.AvailableCommandsPacket;
 import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
+import org.endstone.proxy.protocol.block.BlockJoinIndex;
 import org.endstone.proxy.protocol.block.BlockStateTranslation;
 import org.endstone.proxy.protocol.block.BlockStateUpgrade;
 import org.endstone.proxy.protocol.block.StairIndex;
@@ -63,8 +64,11 @@ public final class ModernClientTo2169Translator implements PacketTranslator {
      */
     private static final StairIndex STAIRS = StairIndex.load("/blockstate/2169-to-2192.json");
 
+    private static final BlockJoinIndex JOINS = BlockJoinIndex.load(
+            "/blockstate/2169-to-2192.json", "/blockstate/block-joins-2192.json");
+
     private static final BlockStateTranslation BLOCKS = new BlockStateTranslation(
-            BlockStateUpgrade.load("/blockstate/2169-to-2192.json"), STAIRS);
+            BlockStateUpgrade.load("/blockstate/2169-to-2192.json"), STAIRS, JOINS);
 
     private ModernClientTo2169Translator() {
     }
@@ -77,6 +81,11 @@ public final class ModernClientTo2169Translator implements PacketTranslator {
     /** The stair index, for a relay that has to settle chunk seams of its own. */
     public static StairIndex stairs() {
         return STAIRS;
+    }
+
+    /** The fence, pane and bar index, for the same reason. */
+    public static BlockJoinIndex joins() {
+        return JOINS;
     }
 
     @Override

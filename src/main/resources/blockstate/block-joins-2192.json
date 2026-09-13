@@ -1,0 +1,72 @@
+{
+  "protocol": 2192,
+  "source": "Minecraft: Java Edition's own block tags and connection rules, which 1.26.50's minecraft:connection_* states exist for parity with. A fence reaches another fence of the same woodiness (Java FenceBlock.isSameFence: minecraft:fences and matching minecraft:wooden_fences membership), so the one non-wooden fence is its own family. Every glass pane, iron bar and copper bar is one family because Java draws them all with IronBarsBlock, whose attachsTo makes no distinction between them. Trip wire reaches only trip wire. The blocks are the 58 that gained minecraft:connection_* in blockstate/2169-to-2192.json and are listed in full so this file can be checked against it.",
+  "families": {
+    "wooden_fence": [
+      "minecraft:acacia_fence",
+      "minecraft:bamboo_fence",
+      "minecraft:birch_fence",
+      "minecraft:cherry_fence",
+      "minecraft:crimson_fence",
+      "minecraft:dark_oak_fence",
+      "minecraft:jungle_fence",
+      "minecraft:mangrove_fence",
+      "minecraft:oak_fence",
+      "minecraft:pale_oak_fence",
+      "minecraft:poplar_fence",
+      "minecraft:spruce_fence",
+      "minecraft:warped_fence"
+    ],
+    "nether_brick_fence": [
+      "minecraft:nether_brick_fence"
+    ],
+    "pane": [
+      "minecraft:black_stained_glass_pane",
+      "minecraft:blue_stained_glass_pane",
+      "minecraft:brown_stained_glass_pane",
+      "minecraft:copper_bars",
+      "minecraft:cyan_stained_glass_pane",
+      "minecraft:exposed_copper_bars",
+      "minecraft:glass_pane",
+      "minecraft:gray_stained_glass_pane",
+      "minecraft:green_stained_glass_pane",
+      "minecraft:hard_black_stained_glass_pane",
+      "minecraft:hard_blue_stained_glass_pane",
+      "minecraft:hard_brown_stained_glass_pane",
+      "minecraft:hard_cyan_stained_glass_pane",
+      "minecraft:hard_glass_pane",
+      "minecraft:hard_gray_stained_glass_pane",
+      "minecraft:hard_green_stained_glass_pane",
+      "minecraft:hard_light_blue_stained_glass_pane",
+      "minecraft:hard_light_gray_stained_glass_pane",
+      "minecraft:hard_lime_stained_glass_pane",
+      "minecraft:hard_magenta_stained_glass_pane",
+      "minecraft:hard_orange_stained_glass_pane",
+      "minecraft:hard_pink_stained_glass_pane",
+      "minecraft:hard_purple_stained_glass_pane",
+      "minecraft:hard_red_stained_glass_pane",
+      "minecraft:hard_white_stained_glass_pane",
+      "minecraft:hard_yellow_stained_glass_pane",
+      "minecraft:iron_bars",
+      "minecraft:light_blue_stained_glass_pane",
+      "minecraft:light_gray_stained_glass_pane",
+      "minecraft:lime_stained_glass_pane",
+      "minecraft:magenta_stained_glass_pane",
+      "minecraft:orange_stained_glass_pane",
+      "minecraft:oxidized_copper_bars",
+      "minecraft:pink_stained_glass_pane",
+      "minecraft:purple_stained_glass_pane",
+      "minecraft:red_stained_glass_pane",
+      "minecraft:waxed_copper_bars",
+      "minecraft:waxed_exposed_copper_bars",
+      "minecraft:waxed_oxidized_copper_bars",
+      "minecraft:waxed_weathered_copper_bars",
+      "minecraft:weathered_copper_bars",
+      "minecraft:white_stained_glass_pane",
+      "minecraft:yellow_stained_glass_pane"
+    ],
+    "trip_wire": [
+      "minecraft:trip_wire"
+    ]
+  }
+}
