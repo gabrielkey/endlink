@@ -2694,6 +2694,12 @@ public final class BackendRelayPacketHandler implements BedrockPacketHandler {
                     connection.client().getSocketAddress(),
                     blockJoinSeams.remembered(),
                     blockJoinSeams.corrected());
+            var census = ModernClientTo2169Translator.blocks().blockJoins().census();
+            if (!census.isEmpty()) {
+                // Every player shares the pass, so this counts the whole proxy rather than this
+                // session. It is here because this is the moment a real world has just gone past it.
+                System.out.printf("Block joins across the proxy so far: %s.%n", census.summary());
+            }
         }
     }
 

@@ -48,12 +48,13 @@ public final class BlockStateTranslation {
     private final StairCornerPass stairCorners;
     private final BlockJoinPass blockJoins;
 
-    public BlockStateTranslation(BlockStateUpgrade upgrade, StairIndex stairs, BlockJoinIndex joins) {
+    public BlockStateTranslation(BlockStateUpgrade upgrade, StairIndex stairs, BlockJoinIndex joins,
+                                 BlockJoinFaces faces) {
         this.upgrade = upgrade;
         this.toNewer = upgrade::toNewer;
         this.toOlder = upgrade::toOlder;
         this.stairCorners = new StairCornerPass(stairs);
-        this.blockJoins = new BlockJoinPass(joins);
+        this.blockJoins = new BlockJoinPass(joins, faces);
     }
 
     public BlockStateUpgrade upgrade() {
@@ -117,12 +118,29 @@ public final class BlockStateTranslation {
     /** A packet on its way from the player to the backend, renumbered the opposite way. */
     public BedrockPacket rewriteServerbound(BedrockPacket packet, IntUnaryOperator map) {
         if (packet instanceof InventoryTransactionPacket transaction) {
+            noteClientBlock(transaction.getBlockDefinition());
             transaction.setBlockDefinition(map(transaction.getBlockDefinition(), map));
         } else if (packet instanceof PlayerAuthInputPacket input && input.getItemUseTransaction() != null) {
             var itemUse = input.getItemUseTransaction();
+            noteClientBlock(itemUse.getBlockDefinition());
             itemUse.setBlockDefinition(map(itemUse.getBlockDefinition(), map));
         }
         return packet;
+    }
+
+    /**
+     * Records the block the player says they clicked, before it is renumbered back down.
+     *
+     * <p>This is the only place the proxy ever learns what the <em>client</em> holds rather than what
+     * was sent to it, and for the 1.26.50 connection states that is the whole question: a click on a
+     * fence that comes back as an armed id means the client took the arms the chunk pass gave it, and
+     * one that comes back armless means they never landed. It is counted rather than logged per
+     * click, and reported once with the rest of the census.
+     */
+    private void noteClientBlock(BlockDefinition definition) {
+        if (definition != null) {
+            blockJoins.describeFromClient(definition.getRuntimeId());
+        }
     }
 
     private void rewriteChunk(LevelChunkPacket chunk, IntUnaryOperator map) {

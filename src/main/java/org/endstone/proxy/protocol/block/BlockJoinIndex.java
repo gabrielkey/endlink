@@ -184,6 +184,23 @@ public final class BlockJoinIndex {
     }
 
     /**
+     * The arms a known joining block's id spells, which is {@link #idFor} run backwards.
+     *
+     * <p>Searched rather than looked up, because the map is built the way the rule uses it and there
+     * are sixteen arrangements to walk. Wanted wherever an id has to be added to rather than replaced
+     * &mdash; settling a seam adds the one arm that crosses it to the arms the block already had.
+     */
+    public int armsOf(Joint joint, int runtimeId) {
+        int[] ids = idsByJoint.get(joint);
+        for (int arms = 0; arms < ARM_PATTERNS; arms++) {
+            if (ids[arms] == runtimeId) {
+                return arms;
+            }
+        }
+        return NO_ARMS;
+    }
+
+    /**
      * Whether a joining block of {@code family} reaches out to a neighbour of {@code neighbourFamily},
      * which is null when the neighbour is not a joining block at all.
      *

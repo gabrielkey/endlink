@@ -2,6 +2,7 @@ package org.endstone.proxy.protocol;
 
 import org.cloudburstmc.protocol.bedrock.packet.AvailableCommandsPacket;
 import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
+import org.endstone.proxy.protocol.block.BlockJoinFaces;
 import org.endstone.proxy.protocol.block.BlockJoinIndex;
 import org.endstone.proxy.protocol.block.BlockStateTranslation;
 import org.endstone.proxy.protocol.block.BlockStateUpgrade;
@@ -64,11 +65,21 @@ public final class ModernClientTo2169Translator implements PacketTranslator {
      */
     private static final StairIndex STAIRS = StairIndex.load("/blockstate/2169-to-2192.json");
 
+    private static final BlockStateUpgrade UPGRADE =
+            BlockStateUpgrade.load("/blockstate/2169-to-2192.json");
+
     private static final BlockJoinIndex JOINS = BlockJoinIndex.load(
             "/blockstate/2169-to-2192.json", "/blockstate/block-joins-2192.json");
 
-    private static final BlockStateTranslation BLOCKS = new BlockStateTranslation(
-            BlockStateUpgrade.load("/blockstate/2169-to-2192.json"), STAIRS, JOINS);
+    /**
+     * Which blocks a fence or pane reaches out to. Keyed by the older version's ids and resolved
+     * through {@code UPGRADE}, so one table answers for both numberings.
+     */
+    private static final BlockJoinFaces FACES =
+            BlockJoinFaces.load("/blockstate/block-join-faces-2169.txt", UPGRADE);
+
+    private static final BlockStateTranslation BLOCKS =
+            new BlockStateTranslation(UPGRADE, STAIRS, JOINS, FACES);
 
     private ModernClientTo2169Translator() {
     }

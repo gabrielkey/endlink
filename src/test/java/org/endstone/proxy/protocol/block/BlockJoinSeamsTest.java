@@ -107,6 +107,32 @@ class BlockJoinSeamsTest {
     }
 
     /**
+     * An arm the pass already gave for a solid block inside the piece must survive the seam. This is
+     * what the add-only rule is for: the stone beside a fence is not remembered, so recomputing the
+     * arms here would find nothing there and take the arm away again.
+     */
+    @Test
+    void anArmGivenForABlockInsideThePieceIsNotTakenAway() {
+        BlockJoinSeams seams = new BlockJoinSeams(INDEX);
+
+        // A fence on the north edge that was sent already reaching east, towards something this
+        // tracker knows nothing about.
+        int sentWithEastArm = INDEX.idFor(joint(OAK_FENCE), Side.EAST.bit());
+        BlockJoinSeams.Collector first = new BlockJoinSeams.Collector();
+        first.accept(8, 6, 0, joint(OAK_FENCE), sentWithEastArm);
+        seams.settle(piece(0, 0, OVERWORLD), first);
+
+        BlockJoinSeams.Collector second = new BlockJoinSeams.Collector();
+        second.accept(8, 6, 15, joint(OAK_FENCE), armless(OAK_FENCE));
+        List<BlockJoinSeams.Correction> corrections = seams.settle(piece(0, -1, OVERWORLD), second);
+
+        BlockJoinSeams.Correction north = byZ(corrections, 0);
+        assertEquals(INDEX.idFor(joint(OAK_FENCE), Side.EAST.bit() | Side.NORTH.bit()),
+                north.runtimeId(),
+                "the seam adds the arm across it and keeps the one that was already there");
+    }
+
+    /**
      * A fence already sent with the right arm must not be corrected again. This is the property that
      * lets the rule be re-run at all, and it is stronger here than for stairs: the rule reads a
      * neighbour's family, which no state of that neighbour can change.

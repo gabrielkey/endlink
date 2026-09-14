@@ -27,7 +27,10 @@ class BlockJoinPassTest {
 
     private static final BlockJoinIndex INDEX =
             BlockJoinIndex.load("/blockstate/2169-to-2192.json", "/blockstate/block-joins-2192.json");
-    private static final BlockJoinPass PASS = new BlockJoinPass(INDEX);
+    private static final BlockJoinFaces FACES = BlockJoinFaces.load(
+            "/blockstate/block-join-faces-2169.txt",
+            BlockStateUpgrade.load("/blockstate/2169-to-2192.json"));
+    private static final BlockJoinPass PASS = new BlockJoinPass(INDEX, FACES);
 
     private static final String OAK_FENCE = "minecraft:oak_fence";
     private static final String SPRUCE_FENCE = "minecraft:spruce_fence";
@@ -146,15 +149,82 @@ class BlockJoinPassTest {
                 armsOf(fence(8, 8, 8, OAK_FENCE), fence(9, 8, 8, GLASS_PANE)));
     }
 
+    // --- Java's third clause: a solid face beside it ------------------------------------------
+
     /**
-     * The clause that is not implemented, asserted so that it is a recorded decision rather than an
-     * oversight: Java also reaches out to a block whose face beside it is solid, and answering that
-     * needs a solidity table this tree does not have.
+     * The clause that took a table of its own. Every one of these is Java's published answer, not a
+     * restatement of the rule: stone is a full cube so everything reaches it; a barrier is a full
+     * cube too but is named in {@code isExceptionForConnection}, so nothing does; and glass is a full
+     * cube that is <em>not</em> an exception, which is the pair that catches a table built from
+     * "looks solid" rather than from the game.
      */
     @Test
-    void aFenceDoesNotYetReachASolidBlock() {
+    void aFenceReachesASolidBlock() {
+        assertEquals(Side.EAST.bit(), armsOf(fence(8, 8, 8, OAK_FENCE), plain(9, 8, 8, "minecraft:stone")));
+    }
+
+    /** And the pane, which is the case that was still wrong in game: glass set into a wall. */
+    @Test
+    void aPaneReachesASolidBlock() {
+        assertEquals(Side.WEST.bit() | Side.EAST.bit(), armsOf(
+                fence(8, 8, 8, GLASS_PANE),
+                plain(7, 8, 8, "minecraft:stone"),
+                plain(9, 8, 8, "minecraft:stone")));
+    }
+
+    /**
+     * A barrier is a full cube and nothing reaches it, because Java names it in
+     * {@code isExceptionForConnection}. It is not in the table at all, which is how the table spells
+     * "nothing reaches this".
+     */
+    @Test
+    void nothingReachesABarrierEvenThoughItIsAFullCube() {
+        assertEquals(BlockJoinIndex.NO_ARMS,
+                armsOf(fence(8, 8, 8, OAK_FENCE), plain(9, 8, 8, "minecraft:barrier")));
+        assertEquals(BlockJoinIndex.NO_ARMS,
+                armsOf(fence(8, 8, 8, GLASS_PANE), plain(9, 8, 8, "minecraft:barrier")));
+    }
+
+    @Test
+    void aPaneReachesAGlassBlock() {
+        assertEquals(Side.EAST.bit(), armsOf(fence(8, 8, 8, GLASS_PANE), plain(9, 8, 8, "minecraft:glass")));
+    }
+
+    /** A block the table has never heard of is reached by nothing, which is the safe way to be wrong. */
+    @Test
+    void anUnknownBlockIsReachedByNothing() {
         assertEquals(BlockJoinIndex.NO_ARMS,
                 armsOf(fence(8, 8, 8, OAK_FENCE), block(SubChunkStorage.index(9, 8, 8), 12345)));
+    }
+
+    @Test
+    void airIsReachedByNothing() {
+        assertEquals(BlockJoinIndex.NO_ARMS,
+                armsOf(fence(8, 8, 8, OAK_FENCE), block(SubChunkStorage.index(9, 8, 8), AIR)));
+    }
+
+    /**
+     * The faces table is keyed by the older version's ids and the pass runs on the newer ones, so a
+     * lookup has to go back through the upgrade table first. A stair is the block that proves it:
+     * 1.26.50 gave it a corner state, so the id the pass meets is one the table has never seen.
+     *
+     * <p>It also pins which way round the sides are read, which is the mistake that would render as
+     * arms pointing the wrong way rather than as a failure. A stair is solid on one side only, so the
+     * same stair reaches a fence from one direction and not from the other &mdash; and Java, not this
+     * test, decides which: {@code weirdo_direction} 1 is a west-facing stair, whose full face is the
+     * one a fence to its west stands against.
+     */
+    @Test
+    void aStairIsReachedThroughTheUpgradeTableAndOnlyOnItsSolidSide() {
+        StairIndex stairs = StairIndex.load("/blockstate/2169-to-2192.json");
+        assertEquals(Side.EAST.bit(), armsOf(
+                        fence(8, 8, 8, OAK_FENCE),
+                        block(SubChunkStorage.index(9, 8, 8), stair(stairs, StairIndex.Facing.WEST))),
+                "a stair id must resolve in the faces table after being carried up to 1.26.50");
+        assertEquals(BlockJoinIndex.NO_ARMS, armsOf(
+                        fence(8, 8, 8, OAK_FENCE),
+                        block(SubChunkStorage.index(9, 8, 8), stair(stairs, StairIndex.Facing.EAST))),
+                "and the same stair turned around presents its open side, which nothing reaches");
     }
 
     // --- the payload --------------------------------------------------------------------------
@@ -239,6 +309,18 @@ class BlockJoinPassTest {
 
     private static Block block(int position, int runtimeId) {
         return new Block(position, runtimeId);
+    }
+
+    /** A 1.26.50 stair, which is what the pass would meet after the ids were carried up. */
+    private static int stair(StairIndex stairs, StairIndex.Facing facing) {
+        return stairs.idFor(new StairIndex.Stair("minecraft:oak_stairs", facing, false),
+                StairIndex.Corner.NONE);
+    }
+
+    /** A block with no states of its own, named as Mojang names it. */
+    private static Block plain(int x, int y, int z, String identifier) {
+        return new Block(SubChunkStorage.index(x, y, z),
+                BedrockBlockStateHash.of(identifier, List.of()));
     }
 
     private static Block fence(int x, int y, int z, String identifier) {

@@ -15,11 +15,11 @@ import java.util.Map;
  * piece that may not have been sent yet, so {@link BlockJoinPass} leaves it armless, and the result
  * without this is a break in every fence line and pane wall every sixteen blocks.
  *
- * <p>The difference is that this rule is even safer to run twice. A stair corner is decided by the
- * facing and half of the stairs around it and never by their corners; a fence's arm is decided by
- * its neighbour's <em>family</em> and never by anything that changes, so a block already reached out
- * once presents exactly the same face the second time. Nothing here can drift, in any order, from
- * either side of a seam.
+ * <p>The difference is what a seam is allowed to change. A stair's corner is recomputed outright,
+ * because every stair the rule consults is remembered. A joining block also reaches out to solid
+ * blocks, and those are <em>not</em> remembered, so recomputing would take arms away that the pass
+ * gave for a wall it could see and this cannot. So a seam only ever adds the one arm that crosses
+ * it, which is the only thing the arrival of a neighbour can teach and cannot drift in any order.
  */
 public final class BlockJoinSeams {
 
@@ -148,24 +148,29 @@ public final class BlockJoinSeams {
     }
 
     /**
-     * Runs the join rule again over one edge of {@code cell}, reading across into {@code beyond}, and
-     * records every block whose id is no longer the one that was sent.
+     * Reaches the joining blocks along one edge of {@code cell} across into {@code beyond}, and
+     * records every one whose id is no longer the one that was sent.
+     *
+     * <p><b>This only ever adds an arm.</b> It would be natural to re-run the whole rule here, and
+     * that is what this did while the rule was only about other joining blocks &mdash; those are all
+     * remembered, so a recomputation agreed with the original. It stopped being safe the moment a
+     * block could also reach out to a solid neighbour: what is remembered of a piece is its joining
+     * blocks, not the stone beside them, so a recomputation would find no wall where the pass had
+     * found one and would take that arm away again. Adding the one arm that crosses the seam cannot
+     * do that, and is all a seam can ever teach: before the neighbour arrived, the answer on that
+     * side was "nothing there", and nothing that arrives later turns an arm off.
+     *
+     * <p><b>What this still does not do</b> is reach a block on the edge out to a <em>solid</em>
+     * block in the next chunk, because that piece's ordinary blocks are not remembered &mdash; only
+     * its joining ones. A pane wall crossing a chunk boundary therefore joins pane to pane across it,
+     * but a pane at the very end of a run still stops short of the stone in the chunk beyond.
      */
     private void resolveEdge(Cell cell, Cell beyond, Edge edge, Piece at, List<Correction> corrections) {
-        JoinLookup around = (x, y, z) -> {
-            if (x >= 0 && x < WIDTH && z >= 0 && z < WIDTH) {
-                return cell.joints.get(position(x, y, z));
-            }
-            // One step past the edge being settled lands in the piece beyond it, at the same place
-            // measured from that piece's own corner.
-            int acrossX = x - edge.dx * WIDTH;
-            int acrossZ = z - edge.dz * WIDTH;
-            if (acrossX < 0 || acrossX >= WIDTH || acrossZ < 0 || acrossZ >= WIDTH) {
-                // A diagonal step, or a step over one of the three edges this is not settling.
-                // Neither is a neighbour of this edge, and the rule takes no diagonals anyway.
-                return null;
-            }
-            return beyond.joints.get(position(acrossX, y, acrossZ));
+        BlockJoinIndex.Side across = switch (edge) {
+            case WEST -> BlockJoinIndex.Side.WEST;
+            case EAST -> BlockJoinIndex.Side.EAST;
+            case NORTH -> BlockJoinIndex.Side.NORTH;
+            case SOUTH -> BlockJoinIndex.Side.SOUTH;
         };
 
         int edgeX = edge == Edge.WEST ? 0 : edge == Edge.EAST ? WIDTH - 1 : -1;
@@ -177,15 +182,28 @@ public final class BlockJoinSeams {
             if ((edgeX >= 0 && x != edgeX) || (edgeZ >= 0 && z != edgeZ)) {
                 continue;
             }
-            int y = unpackY(packed);
             BlockJoinIndex.Joint joint = entry.getValue();
-            int settled = index.idFor(joint, BlockJoinPass.armsOf(around, joint, x, y, z));
+
+            // One step past the edge lands in the piece beyond it, at the same place measured from
+            // that piece's own corner.
+            int acrossX = x + across.dx() - edge.dx * WIDTH;
+            int acrossZ = z + across.dz() - edge.dz * WIDTH;
+            BlockJoinIndex.Joint neighbour =
+                    beyond.joints.get(position(acrossX, unpackY(packed), acrossZ));
+            if (neighbour == null || !BlockJoinIndex.reaches(joint.family(), neighbour.family())) {
+                continue;
+            }
+
             Integer sent = cell.sentIds.get(packed);
-            if (sent != null && settled != sent) {
+            if (sent == null) {
+                continue;
+            }
+            int settled = index.idFor(joint, index.armsOf(joint, sent) | across.bit());
+            if (settled != sent) {
                 cell.sentIds.put(packed, settled);
                 corrections.add(new Correction(
                         at.chunkX() * WIDTH + x,
-                        at.subChunkY() * WIDTH + y,
+                        at.subChunkY() * WIDTH + unpackY(packed),
                         at.chunkZ() * WIDTH + z,
                         settled));
             }

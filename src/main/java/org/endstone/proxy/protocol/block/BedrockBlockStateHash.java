@@ -42,6 +42,12 @@ public final class BedrockBlockStateHash {
     /** What {@code minecraft:unknown} hashes to; Mojang special-cases it rather than hashing it. */
     public static final int UNKNOWN = 0xFFFFFFFE;
 
+    /**
+     * Air, which every empty position in a sub-chunk holds and which the join rule reads as nothing
+     * to reach out to. Named here so the passes agree on it rather than each hashing its own.
+     */
+    public static final int AIR = of("minecraft:air", List.of());
+
     private BedrockBlockStateHash() {
     }
 

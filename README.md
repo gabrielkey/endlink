@@ -137,11 +137,12 @@ from the stairs around each block, using the same rule Java Edition uses — whi
 says the new state exists for parity with. Stairs on a chunk's outer edge are left straight, because
 the neighbouring chunk may not have arrived.
 
-**Fences, panes and bars reach out to each other too**, by the same rule and in the same place: a
-fence connects to a fence of the same woodiness, a pane or bar to any other pane or bar. The one
-clause not yet implemented is Java's third — either also connects to a block whose face beside it is
-solid — because answering that needs a solidity table for every block state, which the proxy has no
-source for. A fence run therefore still stops short where it meets a wall.
+**Fence, pane and bar connections are computed too**, by the same rule and in the same place, and
+with the whole of Java's rule: a fence connects to a fence of the same woodiness, a pane or bar to any
+other pane or bar, and either also connects to a block whose face beside it is solid. That last
+clause is what makes a glass pane set into a stone window frame connect to the frame, and it is
+answered from a generated table of Java's own `connectsTo` and `attachsTo` run against every block
+state — because these states exist for parity with Java, so Java's answers are the right ones.
 
 Going the other way, a state the older version cannot express — an inner-corner stair, a fence
 connected on two sides — arrives as the plain block, which is what that version drew for itself
