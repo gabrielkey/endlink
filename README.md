@@ -19,24 +19,28 @@ On first start it writes a fully documented `config.properties` and creates a `p
 
 > ### Status: in production on one server, still young
 >
-> **Proven in real use:** Minecraft 1.26.40 through 1.26.45 clients against 1.26.40 through 1.26.45
+> **Proven in real use:** Minecraft 1.26.40 through 1.26.50 clients against 1.26.40 through 1.26.45
 > backends, including a 1.26.45 client and a 1.26.44 client on the same backend at once. Players
 > join, play, and switch between backends keeping their session, identity and permissions. That has
 > run a live server at around ten concurrent players.
 >
-> **New in v0.5.0:** Minecraft 1.26.45, protocol 2169. Mojang renumbered the protocol in a hotfix
+> **New in v0.5.1: Minecraft 1.26.50, protocol 2192, played on.** 1.26.50 renumbered the protocol
+> again and this time the format really moved — thirteen packets changed shape and two are new — and
+> it also added properties to 139 block types, which is the part that broke worlds rather than
+> connections. A block's network id is a hash of its state, so every stair, fence, glass pane, iron
+> and copper bar and trip wire became a number the other side had never heard of, and a client with
+> no block for an id draws air: the first 1.26.50 player through an untranslated proxy saw none of
+> them at all. Endlink renumbers them in the chunk data itself, and computes the states the older
+> backend cannot send — a stair's corner shape, and which way a fence, pane or bar reaches out.
+> Confirmed in play on a 1.26.50 client against a live 1.26.45 backend, and checked against a
+> 1.26.45 client standing in the same place. See
+> [1.26.50 clients on older backends](#12650-clients-on-older-backends).
+>
+> **In v0.5.0:** Minecraft 1.26.45, protocol 2169. Mojang renumbered the protocol in a hotfix
 > for a single field, and server software has not followed — so a 1.26.45 client on a 1.26.44
 > backend is the configuration to expect for as long as that lasts, and it needs no configuration
 > here. Confirmed on a live server. See
 > [1.26.45 clients on 1.26.44 backends](#12645-clients-on-12644-backends).
->
-> **Ready for Minecraft 1.26.50, protocol 2192 — built ahead of the release, not yet played on.**
-> 1.26.50 renumbered again, and this time the format really moved: thirteen packets changed shape
-> and two are new. The codec is ported from CloudburstMC's, whose source is Mojang's own preview
-> 26.50.27, so the wire format is not guesswork — but no live 1.26.50 client has connected through
-> this yet, because the release is not out. Expect a 1.26.50 client on a 1.26.45 backend to be the
-> configuration that matters, and see
-> [1.26.50 clients on older backends](#12650-clients-on-older-backends).
 >
 > **Also in v0.5.0, not confirmed in play:** a fix for a mount that stops taking input after a
 > backend switch ([#1](https://github.com/luibara2/endlink/issues/1)). The cause was found by
