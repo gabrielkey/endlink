@@ -22,7 +22,10 @@ class ProtocolRegistryTest {
         assertTrue(registry.findClientCodec(975).isPresent());
         assertTrue(registry.findClientCodec(1001).isPresent());
         assertTrue(registry.findClientCodec(2168).isPresent());
-        assertTrue(registry.findClientCodec(2192).isPresent());
+        assertTrue(registry.findClientCodec(2193).isPresent());
+        // 2192 was the preview's number and the stable release renumbered past it. Nothing can
+        // send it, so nothing may answer for it -- see CanonicalProtocolReleaseTest.
+        assertTrue(registry.findClientCodec(2192).isEmpty());
         assertTrue(registry.findClientCodec(897).isEmpty());
         assertTrue(registry.findClientCodec(976).isEmpty());
         assertEquals(CanonicalProtocol.values().length, registry.supportedClients().size());
@@ -173,29 +176,29 @@ class ProtocolRegistryTest {
     }
 
     /**
-     * The deployment 2192 was added for, and the one that will matter the day 1.26.50 ships: clients
-     * update themselves and Endstone does not, so a 1.26.50 player will be arriving at 1.26.45 and
+     * The deployment this codec was added for, and the one that has mattered since 1.26.50 shipped:
+     * clients update themselves and Endstone does not, so a 1.26.50 player arrives at 1.26.45 and
      * 1.26.44 backends. If this pair does not resolve, that player is refused at the door.
      */
     @Test
     void a_1_26_50_clientReachesTheOlderBackends() {
         ProtocolRegistry registry = ProtocolRegistry.createDefault();
 
-        ProtocolBinding to2169 = registry.findBinding(2192, 2169).orElseThrow();
-        assertEquals(2192, to2169.clientCodec().getProtocolVersion());
+        ProtocolBinding to2169 = registry.findBinding(2193, 2169).orElseThrow();
+        assertEquals(2193, to2169.clientCodec().getProtocolVersion());
         assertEquals(2169, to2169.backendCodec().getProtocolVersion());
         assertSame(ModernClientTo2169Translator.INSTANCE, to2169.translator());
 
         // And on down the chain, which is the point of the graph being a graph.
-        assertTrue(registry.findBinding(2192, 2168).orElseThrow().translator() instanceof ChainedPacketTranslator);
-        assertEquals(2168, registry.findBinding(2192, 2168).orElseThrow().backendCodec().getProtocolVersion());
-        assertEquals(1001, registry.findBinding(2192, 1001).orElseThrow().backendCodec().getProtocolVersion());
-        assertEquals(898, registry.findBinding(2192, 898).orElseThrow().backendCodec().getProtocolVersion());
-        assertSame(IdentityTranslator898.INSTANCE, registry.findBinding(2192, 2192).orElseThrow().translator());
+        assertTrue(registry.findBinding(2193, 2168).orElseThrow().translator() instanceof ChainedPacketTranslator);
+        assertEquals(2168, registry.findBinding(2193, 2168).orElseThrow().backendCodec().getProtocolVersion());
+        assertEquals(1001, registry.findBinding(2193, 1001).orElseThrow().backendCodec().getProtocolVersion());
+        assertEquals(898, registry.findBinding(2193, 898).orElseThrow().backendCodec().getProtocolVersion());
+        assertSame(IdentityTranslator898.INSTANCE, registry.findBinding(2193, 2193).orElseThrow().translator());
     }
 
     /**
-     * 2192 -> 2169 is not the identity edge 2169 -> 2168 is, and the distinction is load-bearing:
+     * 2193 -> 2169 is not the identity edge 2169 -> 2168 is, and the distinction is load-bearing:
      * the first two share a wire format and the second two do not. Asserting the instance keeps the
      * two from being quietly collapsed into one.
      */
@@ -204,7 +207,7 @@ class ProtocolRegistryTest {
         ProtocolRegistry registry = ProtocolRegistry.createDefault();
 
         assertSame(IdentityTranslator898.INSTANCE, registry.findBinding(2169, 2168).orElseThrow().translator());
-        assertSame(ModernClientTo2169Translator.INSTANCE, registry.findBinding(2192, 2169).orElseThrow().translator());
+        assertSame(ModernClientTo2169Translator.INSTANCE, registry.findBinding(2193, 2169).orElseThrow().translator());
     }
 
     /**
@@ -216,9 +219,9 @@ class ProtocolRegistryTest {
     void a_1_26_45_clientCanStillReachA_1_26_50_backend() {
         ProtocolRegistry registry = ProtocolRegistry.createDefault();
 
-        ProtocolBinding binding = registry.findBinding(2169, 2192).orElseThrow();
+        ProtocolBinding binding = registry.findBinding(2169, 2193).orElseThrow();
         assertEquals(2169, binding.clientCodec().getProtocolVersion());
-        assertEquals(2192, binding.backendCodec().getProtocolVersion());
+        assertEquals(2193, binding.backendCodec().getProtocolVersion());
         assertSame(LegacyClientTo2192Translator.INSTANCE, binding.translator());
     }
 
@@ -244,12 +247,13 @@ class ProtocolRegistryTest {
      * an unsupported backend before the player is told anything useful.
      */
     @Test
-    void a_2192_backendIsAKnownBackendCodec() {
+    void a_2193_backendIsAKnownBackendCodec() {
         ProtocolRegistry registry = ProtocolRegistry.createDefault();
 
-        assertTrue(registry.findBackendCodec(2192).isPresent());
-        assertEquals(2192, registry.findBackendCodec(2192).orElseThrow().getProtocolVersion());
-        assertEquals("1.26.50", registry.findBackendCodec(2192).orElseThrow().getMinecraftVersion());
+        assertTrue(registry.findBackendCodec(2193).isPresent());
+        assertEquals(2193, registry.findBackendCodec(2193).orElseThrow().getProtocolVersion());
+        assertEquals("1.26.50", registry.findBackendCodec(2193).orElseThrow().getMinecraftVersion());
+        assertTrue(registry.findBackendCodec(2192).isEmpty());
     }
 
     /**

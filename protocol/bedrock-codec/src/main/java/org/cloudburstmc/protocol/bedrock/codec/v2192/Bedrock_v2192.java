@@ -26,6 +26,14 @@ import org.cloudburstmc.protocol.bedrock.packet.*;
  * two are new, so a 1.26.50 client on an older backend needs the packets rewritten, not passed
  * through — {@code CanonicalProtocol.sharesWireFormat} deliberately does not put 2192 in a family
  * with 2168/2169.
+ *
+ * <p><b>Nothing ever asks for 2192 on the wire.</b> The number belongs to Preview 1.26.50.20
+ * through 1.26.50.27 and to nothing else; stable 1.26.50 renumbered to 2193 and changed not one
+ * byte besides. This class stays the one that holds the format, because the format is what it
+ * describes and what the preview dumps were read against;
+ * {@link org.cloudburstmc.protocol.bedrock.codec.v2193.Bedrock_v2193} is the renumbering on top of
+ * it, and is the codec the proxy actually registers. Read {@code 2192} in a type or resource name
+ * here as "the shape 1.26.50 introduced", not as a protocol number any peer will ever send.
  */
 public class Bedrock_v2192 extends Bedrock_v2169 {
 
@@ -47,7 +55,7 @@ public class Bedrock_v2192 extends Bedrock_v2169 {
             .updateSerializer(SubChunkPacket.class, SubChunkSerializer_v2192.INSTANCE)
             .updateSerializer(ServerboundDiagnosticsPacket.class, ServerboundDiagnosticsSerializer_v2192.INSTANCE)
             .updateSerializer(ServerboundPackSettingChangePacket.class, ServerboundPackSettingChangeSerializer_v2192.INSTANCE)
-            .registerPacket(SetPlayerFurnaceOptionsPacket::new, SetPlayerFurnaceOptionsSerializer_v2192.INSTANCE, 351, PacketRecipient.CLIENT)
+            .registerPacket(SetPlayerFurnaceOptionsPacket::new, SetPlayerFurnaceOptionsSerializer_v2192.INSTANCE, 351, PacketRecipient.BOTH)
             .registerPacket(RecordStartedPacket::new, RecordStartedSerializer_v2192.INSTANCE, 352, PacketRecipient.CLIENT)
             .build();
 }

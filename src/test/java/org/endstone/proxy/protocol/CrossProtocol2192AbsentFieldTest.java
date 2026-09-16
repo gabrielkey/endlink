@@ -7,7 +7,8 @@ import org.cloudburstmc.protocol.bedrock.codec.BedrockCodec;
 import org.cloudburstmc.protocol.bedrock.codec.v2168.BedrockCodecHelper_v2168;
 import org.cloudburstmc.protocol.bedrock.codec.v2169.BedrockCodecHelper_v2169;
 import org.cloudburstmc.protocol.bedrock.codec.v2169.Bedrock_v2169;
-import org.cloudburstmc.protocol.bedrock.codec.v2192.Bedrock_v2192;
+import org.cloudburstmc.protocol.bedrock.codec.v2193.Bedrock_v2193;
+import org.cloudburstmc.protocol.bedrock.data.FurnaceOptions;
 import org.cloudburstmc.protocol.bedrock.data.PacketRecipient;
 import org.cloudburstmc.protocol.bedrock.data.attributelayer.EnvironmentAttributeData;
 import org.cloudburstmc.protocol.bedrock.data.attributelayer.FloatAttributeData;
@@ -44,14 +45,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * written by a method that rejects null.</p>
  *
  * <p>So each test below decodes with the <em>2169</em> codec, which is the only way to get the
- * genuinely absent value rather than a null someone remembered to set, and then encodes with 2192,
+ * genuinely absent value rather than a null someone remembered to set, and then encodes with 2193,
  * which is what the proxy does for a 1.26.50 client on a 1.26.45 backend. A throw here is a packet
- * the relay silently drops.</p>
+ * the relay silently drops. 2193 rather than 2192 because 2193 is what ships and what is
+ * registered; it inherits every serializer here from 2192 unchanged, so this exercises the same
+ * code either way and pins the codec the proxy will actually hand a player.</p>
  */
 class CrossProtocol2192AbsentFieldTest {
 
     private static final BedrockCodec OLD = Bedrock_v2169.CODEC;
-    private static final BedrockCodec NEW = Bedrock_v2192.CODEC;
+    private static final BedrockCodec NEW = Bedrock_v2193.CODEC;
 
     @Test
     void aDimensionFromA1_26_45BackendReachesA1_26_50Client() {
@@ -111,13 +114,44 @@ class CrossProtocol2192AbsentFieldTest {
      * either ever became serverbound, it would.
      */
     @Test
-    void theTwoNewPacketsAreClientboundAndNewOnly() {
+    void theTwoNewPacketsExistOnlyOnTheNewerSide() {
         assertEquals(351, NEW.getPacketDefinition(SetPlayerFurnaceOptionsPacket.class).getId());
         assertEquals(352, NEW.getPacketDefinition(RecordStartedPacket.class).getId());
         assertNull(OLD.getPacketDefinition(351));
         assertNull(OLD.getPacketDefinition(352));
-        assertEquals(PacketRecipient.CLIENT, NEW.getPacketDefinition(351).getRecipient());
         assertEquals(PacketRecipient.CLIENT, NEW.getPacketDefinition(352).getRecipient());
+    }
+
+    /**
+     * 351 goes both ways, and the drop rule depends on it.
+     *
+     * <p>This tree copied {@code PacketRecipient.CLIENT} from upstream's 2192 codec, and upstream
+     * has since corrected it to {@code BOTH} ({@code 863e6e91}). The difference is not cosmetic:
+     * {@code tryDecode} refuses a packet whose definition names the other recipient, so with
+     * {@code CLIENT} a 1.26.50 player who touched a furnace screen threw on decode; and with
+     * {@code BOTH} but no drop rule, the same packet reaches a 2169 backend codec that has no
+     * definition to encode it against. Both halves are needed, so both are pinned here and in
+     * {@code ClientRelayPacketHandler.shouldDropCrossProtocolServerbound}.
+     */
+    @Test
+    void theFurnaceOptionsPacketIsAcceptedFromAClientAndDroppedTowardsAnOlderBackend() {
+        assertEquals(PacketRecipient.BOTH, NEW.getPacketDefinition(351).getRecipient());
+        assertDoesNotThrow(() -> {
+            ByteBuf buffer = Unpooled.buffer();
+            try {
+                SetPlayerFurnaceOptionsPacket packet = new SetPlayerFurnaceOptionsPacket();
+                packet.setType(SetPlayerFurnaceOptionsPacket.FurnaceType.BLAST_FURNACE);
+                packet.setOptions(new FurnaceOptions(
+                        FurnaceOptions.FurnaceLeftTabIndex.RECIPE_FOOD, true,
+                        FurnaceOptions.FurnaceLayout.DEFAULT));
+                NEW.tryEncode(NEW.createHelper(), buffer, packet);
+                // SERVER is the recipient a packet arriving from a player carries. This threw
+                // "was sent to SERVER instead of CLIENT" before the recipient was corrected.
+                assertEquals(packet, NEW.tryDecode(NEW.createHelper(), buffer, 351, PacketRecipient.SERVER));
+            } finally {
+                buffer.release();
+            }
+        });
     }
 
     /**

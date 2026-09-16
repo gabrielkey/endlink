@@ -54,7 +54,7 @@ public final class ProtocolRegistry {
      * <p>Exists so an addon can contribute edges the proxy has no business knowing about. The proxy's
      * own graph ordinarily goes newer&rarr;older only; an addon adds the upgrade edge its translator needs, and a proxy running without it has no idea that direction exists.</p>
      *
-     * <p>2169&rarr;2192 is the single exception the proxy owns, added because a backend that updates
+     * <p>2169&rarr;2193 is the single exception the proxy owns, added because a backend that updates
      * before its players leaves them with no path at all. It is justified by being one known version
      * step whose translation inverts exactly, not by a general willingness to route upwards; see
      * {@link LegacyClientTo2192Translator}.</p>
@@ -71,7 +71,7 @@ public final class ProtocolRegistry {
                 .codec(CanonicalProtocol.V1_26_45)
                 .codec(CanonicalProtocol.V1_26_50)
                 // Directed adjacent translators (newer -> older). Longer gaps are auto-chained.
-                // 2192 -> 2169 is a real format step, not the renumbering the one below it is: the
+                // 2193 -> 2169 is a real format step, not the renumbering the one below it is: the
                 // codecs reshape thirteen packets across it and the pairing is isCrossProtocol().
                 // It still rewrites nothing itself, because each leg's codec writes its own shape --
                 // see ModernClientTo2169Translator for why that is enough here and what would have

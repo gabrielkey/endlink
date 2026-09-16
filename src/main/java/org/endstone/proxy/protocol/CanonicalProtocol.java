@@ -8,7 +8,7 @@ import org.cloudburstmc.protocol.bedrock.codec.v975.Bedrock_v975;
 import org.cloudburstmc.protocol.bedrock.codec.v1001.Bedrock_v1001;
 import org.cloudburstmc.protocol.bedrock.codec.v2168.Bedrock_v2168;
 import org.cloudburstmc.protocol.bedrock.codec.v2169.Bedrock_v2169;
-import org.cloudburstmc.protocol.bedrock.codec.v2192.Bedrock_v2192;
+import org.cloudburstmc.protocol.bedrock.codec.v2193.Bedrock_v2193;
 
 import java.util.Optional;
 
@@ -28,19 +28,27 @@ public enum CanonicalProtocol {
     // One codec, one release: the protocol number identifies the wire format again, so this entry
     // needs no newest-release override and BedrockRelease has nothing to decide for it.
     V1_26_45(Bedrock_v2169.CODEC),
-    // 1.26.50 renumbered again, 2169 -> 2192, and this time the format really moved: thirteen
-    // packets changed shape and two are new. Unlike the 2168/2169 pair it is not wire-compatible
-    // with its predecessor, which is why it is deliberately absent from sharesWireFormat below.
+    // 1.26.50 renumbered again, and this time the format really moved: thirteen packets changed
+    // shape and two are new. Unlike the 2168/2169 pair it is not wire-compatible with its
+    // predecessor, which is why it is deliberately absent from sharesWireFormat below.
     //
-    // No newest-release override, on purpose. 1.26.30 and 1.26.40 each kept their number across a
-    // run of hotfixes, so 1.26.51 and up probably speak 2192 too -- but 1.26.45 renumbered mid-line
-    // after four releases had not, so "probably" is the whole of the evidence. Claiming the line
-    // here would make a pinned backend.protocol=1.26.5x silently select this codec for a release
-    // that had in fact renumbered, and a wrong codec is a bad join rather than a clear error.
-    // Withholding it costs an operator who pins a hotfix by name one startup error naming the
-    // supported values, and costs 'auto' nothing at all: it reads the backend's protocol number.
-    // Widen it to the releases that turn out to share 2192, once they exist and are known to.
-    V1_26_50(Bedrock_v2192.CODEC);
+    // The number is 2193, not the 2192 this was first built against. 2192 was the preview's, and
+    // the preview is the only thing that ever sent it: stable 1.26.50 renumbered on the way out.
+    // Speaking 2192 alone therefore turned away every real 1.26.50 player, with the one message
+    // that reads as the proxy's fault and is --
+    //
+    //   Rejected /... with LOGIN_FAILED_SERVER_OLD: client protocol 2193, proxy speaks up to 2192
+    //
+    // -- and it did so on the live proxy for four days. Nothing else moved across the renumber;
+    // see Bedrock_v2193 for the two-file diff that says so.
+    //
+    // The newest-release override is now earned rather than guessed, which is what the comment
+    // this replaces was waiting for. 1.26.51's dump against 1.26.50's changes one line of a README
+    // and nothing else, so 2193 demonstrably covers both and a pinned backend.protocol=1.26.51
+    // selects the right codec instead of failing startup. Widen it again the same way: read the
+    // dump, do not extrapolate the run of hotfixes. 1.26.45 renumbered mid-line after four
+    // releases had not, and a wrong codec is a bad join rather than a clear error.
+    V1_26_50(Bedrock_v2193.CODEC, "1.26.51");
 
     private final BedrockCodec codec;
 
@@ -179,7 +187,7 @@ public enum CanonicalProtocol {
      * <p>So a new codec that is wire-compatible with its neighbour must be named here as well as
      * registered. Adding one without this makes it join, and then quietly degrades it.
      *
-     * <p>The converse holds too, and 2192 is the case for it: 1.26.50 is a renumbering <em>and</em> a
+     * <p>The converse holds too, and 2193 is the case for it: 1.26.50 is a renumbering <em>and</em> a
      * format change, so it is not in the family below. A 1.26.50 client on a 1.26.45 backend needs
      * every one of those workarounds, because the two genuinely disagree about the wire.</p>
      */

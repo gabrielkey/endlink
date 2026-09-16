@@ -1018,12 +1018,24 @@ public final class ClientRelayPacketHandler implements BedrockPacketHandler {
         return true;
     }
 
+    /**
+     * Packets a newer client can send that an older backend has no id for.
+     *
+     * <p>{@code SetPlayerFurnaceOptionsPacket} (351) is new at 1.26.50 and was read as clientbound
+     * when this tree's 2192 codec was written &mdash; the reasoning is still in
+     * {@link org.endstone.proxy.protocol.ModernClientTo2169Translator}, corrected. It is
+     * {@code PacketRecipient.BOTH} upstream (CloudburstMC/Protocol {@code 863e6e91}), so a 1.26.50
+     * player who touches a furnace screen sends one, and a 2169 or 2168 backend codec has no
+     * definition to encode it against. It carries a screen preference, so dropping it costs that
+     * preference and nothing else.</p>
+     */
     private boolean shouldDropCrossProtocolServerbound(BedrockPacket packet) {
         return switch (packet.getClass().getSimpleName()) {
             case "EditorNetworkPacket",
                  "ResourcePacksReadyForValidationPacket",
                  "PartyChangedPacket",
                  "ServerboundDataDrivenScreenClosedPacket",
+                 "SetPlayerFurnaceOptionsPacket",
                  "ServerboundDiagnosticsPacket" -> true;
             default -> false;
         };
