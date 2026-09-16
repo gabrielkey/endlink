@@ -24,7 +24,15 @@ On first start it writes a fully documented `config.properties` and creates a `p
 > join, play, and switch between backends keeping their session, identity and permissions. That has
 > run a live server at around ten concurrent players.
 >
-> **New in v0.5.1: Minecraft 1.26.50 and 1.26.51, protocol 2193, played on.** 1.26.50 renumbered the protocol
+> **New in v0.5.2: the protocol number 1.26.50 actually shipped with.** v0.5.1 was built against
+> Preview 26.50.27, which asks for **2192**. The stable release renumbered to **2193** on the way
+> out, so v0.5.1 refused every real 1.26.50 and 1.26.51 player at the door with *client protocol
+> 2193, proxy speaks up to 2192*. Nothing else about 1.26.50 changed across the renumber — Mojang's
+> own schema dump for the preview against the one for the release differs in two files, a README and
+> that number — so everything below is as it was, under the number clients send. **Anyone running
+> v0.5.1 should upgrade**; there is no configuration that works around it.
+>
+> **In v0.5.1: Minecraft 1.26.50 and 1.26.51, played on.** 1.26.50 renumbered the protocol
 > again and this time the format really moved — thirteen packets changed shape and two are new — and
 > it also added properties to 139 block types, which is the part that broke worlds rather than
 > connections. A block's network id is a hash of its state, so every stair, fence, glass pane, iron
@@ -35,12 +43,6 @@ On first start it writes a fully documented `config.properties` and creates a `p
 > Confirmed in play on a 1.26.51 client against a live 1.26.44 backend, and checked against a
 > 1.26.45 client standing in the same place. See
 > [1.26.50 clients on older backends](#12650-clients-on-older-backends).
->
-> Note the number. This was first built against Preview 26.50.27, which asks for **2192**; the
-> stable release renumbered to **2193** on the way out and changed nothing else. A proxy that
-> speaks only 2192 turns every real 1.26.50 player away with *client protocol 2193, proxy speaks
-> up to 2192* — which is why this says 2193, and why a preview's protocol number is not a
-> release's.
 >
 > **In v0.5.0:** Minecraft 1.26.45, protocol 2169. Mojang renumbered the protocol in a hotfix
 > for a single field, and server software has not followed — so a 1.26.45 client on a 1.26.44
