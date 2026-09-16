@@ -3,7 +3,7 @@
 [![Build](https://github.com/luibara2/endlink/actions/workflows/build.yml/badge.svg)](https://github.com/luibara2/endlink/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/luibara2/endlink?include_prereleases&sort=semver)](https://github.com/luibara2/endlink/releases)
 [![Licence](https://img.shields.io/github/license/luibara2/endlink)](LICENSE)
-[![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-1.26.50-brightgreen)](https://github.com/luibara2/endlink#versions-run-the-latest-on-both-ends)
+[![Minecraft](https://img.shields.io/badge/Minecraft%20Bedrock-1.26.51-brightgreen)](https://github.com/luibara2/endlink#versions-run-the-latest-on-both-ends)
 
 A Velocity-style proxy for Minecraft: Bedrock with Endstone/BDS backends. Players stay connected to
 the proxy while switching between backend servers; the proxy owns authentication and forges offline
@@ -19,12 +19,12 @@ On first start it writes a fully documented `config.properties` and creates a `p
 
 > ### Status: in production on one server, still young
 >
-> **Proven in real use:** Minecraft 1.26.40 through 1.26.50 clients against 1.26.40 through 1.26.45
+> **Proven in real use:** Minecraft 1.26.40 through 1.26.51 clients against 1.26.40 through 1.26.45
 > backends, including a 1.26.45 client and a 1.26.44 client on the same backend at once. Players
 > join, play, and switch between backends keeping their session, identity and permissions. That has
 > run a live server at around ten concurrent players.
 >
-> **New in v0.5.1: Minecraft 1.26.50, protocol 2192, played on.** 1.26.50 renumbered the protocol
+> **New in v0.5.1: Minecraft 1.26.50 and 1.26.51, protocol 2193, played on.** 1.26.50 renumbered the protocol
 > again and this time the format really moved — thirteen packets changed shape and two are new — and
 > it also added properties to 139 block types, which is the part that broke worlds rather than
 > connections. A block's network id is a hash of its state, so every stair, fence, glass pane, iron
@@ -32,9 +32,15 @@ On first start it writes a fully documented `config.properties` and creates a `p
 > no block for an id draws air: the first 1.26.50 player through an untranslated proxy saw none of
 > them at all. Endlink renumbers them in the chunk data itself, and computes the states the older
 > backend cannot send — a stair's corner shape, and which way a fence, pane or bar reaches out.
-> Confirmed in play on a 1.26.50 client against a live 1.26.45 backend, and checked against a
+> Confirmed in play on a 1.26.51 client against a live 1.26.44 backend, and checked against a
 > 1.26.45 client standing in the same place. See
 > [1.26.50 clients on older backends](#12650-clients-on-older-backends).
+>
+> Note the number. This was first built against Preview 26.50.27, which asks for **2192**; the
+> stable release renumbered to **2193** on the way out and changed nothing else. A proxy that
+> speaks only 2192 turns every real 1.26.50 player away with *client protocol 2193, proxy speaks
+> up to 2192* — which is why this says 2193, and why a preview's protocol number is not a
+> release's.
 >
 > **In v0.5.0:** Minecraft 1.26.45, protocol 2169. Mojang renumbered the protocol in a hotfix
 > for a single field, and server software has not followed — so a 1.26.45 client on a 1.26.44
@@ -118,13 +124,20 @@ their server software does.
 
 ### 1.26.50 clients on older backends
 
-Minecraft 1.26.50 renumbered the protocol again, 2169 to 2192. Unlike the 1.26.45 hotfix above this
+Minecraft 1.26.50 renumbered the protocol again, 2169 to 2193. Unlike the 1.26.45 hotfix above this
 is a real format change — thirteen packets moved and two are new — so it is not a pair of numbers
 for one wire format, and the proxy translates across it in earnest rather than passing packets
 through.
 
-Endlink speaks 2192, so once 1.26.50 lands a player on it reaches a 1.26.45, 1.26.44 or 1.26.40
+Endlink speaks 2193, so a 1.26.50 or 1.26.51 player reaches a 1.26.45, 1.26.44 or 1.26.40
 backend with nothing to configure. Leave `backend.protocol=auto` and it resolves the pair itself.
+
+**2192 was the preview's number, not the release's.** Mojang's dumps for Preview 26.50.27 and for
+stable 1.26.50.5 differ in two files: a README and the protocol number. Everything written against
+the preview was therefore correct except the one number that decides whether a player is let in at
+all, and a proxy pinned to 2192 refuses every real 1.26.50 client with `LOGIN_FAILED_SERVER_OLD`.
+If you are reading a codec, a changelog or a third-party table that says 1.26.50 is 2192, it was
+written before the release shipped.
 
 **Blocks are translated across this step, not just packets.** 1.26.50 added properties to 139 block
 types — every stair gained a corner state, and every fence, glass pane, iron and copper bar and trip
