@@ -19,6 +19,17 @@ public class ItemUseTransaction {
     private Vector3i blockPosition;
     private int blockFace;
     private int hotbarSlot;
+    /**
+     * Which hand the interaction came from, as {@code HandSlot}: 0 main, 1 off.
+     *
+     * <p>Held as an {@code int} rather than an enum, matching {@code InventoryTransactionPacket}'s
+     * field of the same name in this tree. Upstream reads it as {@code HandSlot.values()[b]}, which
+     * throws {@link ArrayIndexOutOfBoundsException} for any other byte &mdash; and this value comes
+     * straight off a client, so that is a decode fault a player can trigger at will. An int cannot.
+     *
+     * @since v2192
+     */
+    private int hand;
     private ItemData itemInHand;
     private Vector3f playerPosition;
     private Vector3f clickPosition;

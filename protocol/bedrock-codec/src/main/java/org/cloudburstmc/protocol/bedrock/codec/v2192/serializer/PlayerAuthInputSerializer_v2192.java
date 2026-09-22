@@ -116,6 +116,17 @@ public class PlayerAuthInputSerializer_v2192 extends PlayerAuthInputSerializer_v
         packet.setCameraOrientation(helper.readVector3f(buffer));
         packet.setRawMoveVector(helper.readVector2f(buffer));
     }
+    /**
+     * 1.26.50 put a hand byte between the hotbar slot and the item, here as well as in
+     * {@code InventoryTransactionPacket}.
+     *
+     * <p>They are the same structure: Mojang's dump has {@code PlayerAuthInputPacket}'s item use
+     * transaction as a {@code PackedItemUseLegacyInventoryTransaction}, which holds an
+     * {@code ItemUseInventoryTransaction} &mdash; exactly the type the standalone packet writes,
+     * {@code Hand} and all. The 1.26.50 port added the byte to the standalone path and missed this
+     * one, so the field was read as the start of the item and every field after it in the packet
+     * came out of the wrong bytes.
+     */
     @Override
     protected void writeItemUseTransaction(ByteBuf buffer, BedrockCodecHelper helper, ItemUseTransaction transaction) {
         int legacyRequestId = transaction.getLegacyRequestId();
@@ -138,6 +149,7 @@ public class PlayerAuthInputSerializer_v2192 extends PlayerAuthInputSerializer_v
         helper.writeBlockPosition(buffer, transaction.getBlockPosition());
         buffer.writeByte(transaction.getBlockFace());
         VarInts.writeInt(buffer, transaction.getHotbarSlot());
+        buffer.writeByte(transaction.getHand()); // new
         helper.writeItem(buffer, transaction.getItemInHand());
         helper.writeVector3f(buffer, transaction.getPlayerPosition());
         helper.writeVector3f(buffer, transaction.getClickPosition());
@@ -171,6 +183,7 @@ public class PlayerAuthInputSerializer_v2192 extends PlayerAuthInputSerializer_v
         itemTransaction.setBlockPosition(helper.readBlockPosition(buffer));
         itemTransaction.setBlockFace(buffer.readUnsignedByte());
         itemTransaction.setHotbarSlot(VarInts.readInt(buffer));
+        itemTransaction.setHand(buffer.readUnsignedByte()); // new
         itemTransaction.setItemInHand(helper.readItem(buffer));
         itemTransaction.setPlayerPosition(helper.readVector3f(buffer));
         itemTransaction.setClickPosition(helper.readVector3f(buffer));

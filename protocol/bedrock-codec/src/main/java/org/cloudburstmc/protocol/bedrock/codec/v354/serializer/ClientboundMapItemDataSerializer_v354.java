@@ -83,7 +83,12 @@ public class ClientboundMapItemDataSerializer_v354 implements BedrockPacketSeria
         }
 
         if ((type & FLAG_DECORATION_UPDATE) != 0) {
-            this.writeMapDecorations(buffer, helper, packet);
+            // Was writeMapDecorations, which writes the decorations already on the packet into the
+            // buffer being read from instead of reading them out of it. v544 and v2168 both override
+            // deserialize, so nothing from v544 up reaches this and no protocol the proxy actually
+            // speaks is affected - v1001 included. It is wrong for v354 to v534 and fixed here
+            // because it is cheap to be right in a vendored tree, not because anything was broken.
+            this.readMapDecorations(buffer, helper, packet);
         }
 
         if ((type & FLAG_TEXTURE_UPDATE) != 0) {
